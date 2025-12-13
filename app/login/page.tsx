@@ -1,11 +1,5 @@
 "use client";
 
-/*
-  This is the /login page.
-  Next.js App Router rule:
-  - app/login/page.tsx becomes the route: /login
-*/
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -14,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 
 export default function LoginPage() {
-  // Next.js router for navigation (redirecting to other pages)
+  // Next.js router for navigation 
   const router = useRouter();
 
   // Get auth info + functions from our Auth context
@@ -54,11 +48,11 @@ export default function LoginPage() {
     }
 
     try {
-      // If we're in login mode: sign in
+      // If we're in login mode, the user can see sign in
       if (mode === "login") {
         await login(email.trim(), password);
       } else {
-        // If we're in signup mode: create account
+        // If we're in signup mode, the user can see create account
         await signup(email.trim(), password);
       }
 
