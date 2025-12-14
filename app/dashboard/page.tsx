@@ -37,12 +37,12 @@ export default function DashboardPage() {
 
   // Go to chatbox 1.0 / workspace
   const handleWorkspace = async () => {
-    await logout();
     router.replace("/chat1.0");
   }
 
   // Logout handler
   const handleLogout = async () => {
+    await logout();
     router.replace("/login");
   };
 
