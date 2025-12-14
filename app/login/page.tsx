@@ -12,7 +12,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   // Get auth info + functions from our Auth context
-  const { user, loading, login, signup } = useAuth();
+  const { user, loading, login, signup, loginWithGoogle } = useAuth();
 
   // Form fields
   const [email, setEmail] = useState("");
@@ -68,6 +68,17 @@ export default function LoginPage() {
 
   };
 
+  const handleGoogleLogin = async () => {
+    setError(null);
+    try {
+      await loginWithGoogle();
+      router.replace("/dashboard");
+    } catch (e) {
+      if (e instanceof Error) setError(e.message);
+      else setError("Google login failed.");
+    }
+  }
+
   // While Firebase checks whether the user is logged in
   if (loading) {
     return (
@@ -112,6 +123,12 @@ export default function LoginPage() {
           onClick={handleSubmit}
         >
           {mode === "login" ? "Log In" : "Sign Up"}
+        </button>
+
+        {/* Google Sign-in button*/}
+        <button 
+          className="w-full border rounded-xl p-3 bg-blue-500 text-white mt-2"
+          onClick={handleGoogleLogin}>
         </button>
 
         {/* Switch between login and signup */}
