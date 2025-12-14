@@ -43,7 +43,6 @@ export default function DashboardPage() {
 
   // Logout handler
   const handleLogout = async () => {
-    await logout();
     router.replace("/login");
   };
 
