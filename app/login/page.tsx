@@ -129,6 +129,7 @@ export default function LoginPage() {
         <button 
           className="w-full border rounded-xl p-3 bg-blue-500 text-white mt-2"
           onClick={handleGoogleLogin}>
+            Sign in with Google!
         </button>
 
         {/* Switch between login and signup */}
