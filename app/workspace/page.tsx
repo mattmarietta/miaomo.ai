@@ -8,6 +8,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import Markdown from "react-markdown";
+import { DefaultChatTransport } from "ai";
+import { useAuth } from "@/components/Auth";
+import { useRouter } from "next/navigation";
+import { ChatAgent } from "@/app/api/chat/ai";
 
 interface ChatTab {
     id: string;
@@ -17,7 +21,20 @@ interface ChatTab {
 const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
 
 export default function Chat() {
-    const { messages, sendMessage, status } = useChat();
+    const { user, loading, logout } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!loading && !user) {
+            router.push("/login");
+        }
+    }, [user, loading, router]);
+
+    const { messages, sendMessage, status } = useChat<ChatAgent>({
+        transport: new DefaultChatTransport({
+            api: "/api/chat",
+        })
+    });
     const [input, setInput] = useState("");
     const [tabs, setTabs] = useState<ChatTab[]>([{ id: "chat-1", title: "New Chat" }]);
     const [activeTab, setActiveTab] = useState("chat-1");
@@ -58,14 +75,29 @@ export default function Chat() {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+   
+
+    if (loading) {
+        return (
+            <div className="flex h-dvh items-center justify-center bg-background">
+                <p className="text-muted-foreground">Loading...</p>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return null;
+    }
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const idToken = await user.getIdToken()
         if (input.trim()) {
-            sendMessage({ text: input });
+            sendMessage({ text: input }, {headers: {
+                "Authorization": `Bearer ${idToken}`
+            }});
             setInput("");
         }
     };
-
     return (
         <div className="flex h-dvh bg-background">
             {/* PDF Viewer Area */}
