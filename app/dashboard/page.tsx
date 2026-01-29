@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+// Auth context (Firebase auth wrapper)
 import { useAuth } from "@/components/Auth";
 
 export default function DashboardPage() {
@@ -49,7 +51,7 @@ export default function DashboardPage() {
     /*
     What needs to be finished 
     1) Add upload UI and connect to Firebase Storage
-    2) Save uploaded docs in Firestore 
+    2) Save uploaded docs in Firestore
     3) Show recent documents for this user
     4) Add Workspace page (chat + annotations)
   */
