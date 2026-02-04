@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import FileUploader from "@/components/FileUploader";
 import Markdown from "react-markdown";
 
 interface ChatTab {
@@ -67,17 +68,25 @@ export default function Chat() {
     };
 
     return (
-        <div className="flex h-dvh bg-background">
-            {/* PDF Viewer Area */}
-            <div className="grow min-w-0 flex items-center justify-center bg-muted/30">
-                <div className="flex flex-col items-center gap-3">
-                    <FileText size={32} className="text-muted-foreground/50" strokeWidth={1.5} />
-                    <p className="text-xs text-muted-foreground">Drop a PDF here</p>
+        <div className="flex h-dvh w-full overflow-hidden bg-background">
+            {/* Left Side */}
+            <div className="flex flex-col flex-1 min-w-0 bg-muted/30">
+                {/* Top Section / PDF Viewer Area */}
+                <main className="grow flex items-center justify-center overflow-auto p-4">
+                    <div className="text-muted-foreground">
+                        PDF Preview Space
+                    </div>
+                </main>
+                
+                {/* Bottom Section */}
+                <div className="h-24 shrink-0 border-t border-border/50 bg-background/50 flex items-center justify-center">
+                        {/* Uploader */}
+                        <FileUploader />
                 </div>
             </div>
 
-            {/* Chat Panel */}
-            <div className="flex flex-col w-full max-w-lg border-l border-border">
+            <div className="flex flex-col flex-1 min-w-0 border-l border-border bg-card">
+                {/* Chat Panel */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                     {/* Tab Bar */}
                     <div className="flex items-center gap-1 px-2 py-2 border-b border-border">
@@ -158,9 +167,9 @@ export default function Chat() {
                             </div>
 
                             {/* Input Area */}
-                            <div className="px-4 pb-4">
-                                <form onSubmit={handleSubmit}>
-                                    <div className="rounded-3xl border border-border bg-card shadow-xs focus-within:ring-2 focus-within:ring-ring/20 transition-shadow">
+                            <div className="w-full px-4 pb-6 flex flex-col items-center">
+                                <form onSubmit={handleSubmit} className="w-full">
+                                    <div className="w-full rounded-3xl border border-border bg-card shadow-xs focus-within:ring-2 focus-within:ring-ring/20 transition-shadow">
                                         <textarea
                                             ref={textareaRef}
                                             className="w-full px-4 pt-3 pb-2 text-sm bg-transparent resize-none focus:outline-none leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] placeholder:text-muted-foreground"
