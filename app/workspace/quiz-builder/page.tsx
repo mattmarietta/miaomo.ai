@@ -9,6 +9,7 @@ import { ArrowLeft, Plus, FileText, Trash2, Play, Sparkles, Layers } from "lucid
 
 type Tab = "study-sets" | "paste-text";
 
+// Character limits for paste text
 const MIN_CHARS = 300;
 const MAX_CHARS = 100000;
 
@@ -16,35 +17,43 @@ export default function QuizBuilderPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
+  // Quiz list state
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Tab navigation
   const [activeTab, setActiveTab] = useState<Tab>("study-sets");
   
+  // Create modal state
   const [showModal, setShowModal] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Paste text generation state
   const [pasteText, setPasteText] = useState("");
   const [questionCount, setQuestionCount] = useState(10);
   const [generating, setGenerating] = useState(false);
   const [generatingStatus, setGeneratingStatus] = useState("");
   
+  // Question type toggles
   const [includeMultipleChoice, setIncludeMultipleChoice] = useState(true);
   const [includeTrueFalse, setIncludeTrueFalse] = useState(true);
   const [includeWritten, setIncludeWritten] = useState(true);
   const [includeMatching, setIncludeMatching] = useState(false);
 
+  // Text validation
   const charCount = pasteText.length;
   const isValidLength = charCount >= MIN_CHARS && charCount <= MAX_CHARS;
   const showCharWarning = charCount > 0 && !isValidLength;
 
+  // Redirect to login if not authenticated
   useEffect(() => {
     if (authLoading) return;
     if (!user) router.replace("/login");
   }, [authLoading, user, router]);
 
+  // Load user's quizzes
   useEffect(() => {
     if (!user) return;
 
@@ -62,6 +71,7 @@ export default function QuizBuilderPage() {
     load();
   }, [user]);
 
+  // Create empty study set manually
   async function handleCreate() {
     if (!user || !newTitle.trim()) return;
     setCreating(true);
@@ -75,9 +85,11 @@ export default function QuizBuilderPage() {
     }
   }
 
+  // Generate quiz from pasted text using AI
   async function handleGenerate() {
     if (!user || !isValidLength) return;
     
+    // Collect selected question types
     const types: string[] = [];
     if (includeMultipleChoice) types.push("multiple-choice");
     if (includeTrueFalse) types.push("true-false");
@@ -93,28 +105,35 @@ export default function QuizBuilderPage() {
     setGeneratingStatus("Creating study set...");
 
     try {
+      // Create title from first line of text
       const firstLine = pasteText.split('\n')[0] || pasteText;
       const title = firstLine.substring(0, 50).trim() + (firstLine.length > 50 ? "..." : "");
+      
+      // Create quiz in Firebase
       const quiz = await createQuiz(user.uid, title, "Generated from pasted text");
       
       setGeneratingStatus("Extracting concepts...");
       
+      // Generate questions with AI
       const questions = await generateQuestionsFromText(pasteText, questionCount, types);
       
       setGeneratingStatus("Saving questions...");
       
+      // Save questions to quiz
       await updateQuiz(quiz.id, { questions });
       
+      // Navigate to quiz editor
       router.push(`/workspace/quiz-builder/${quiz.id}`);
       
     } catch (err) {
-      console.error("Generation error:", err);
-      alert("Failed to generate quiz. Please check your API key and try again.");
+      console.error(err);
+      alert("Failed to generate quiz. Please try again.");
       setGenerating(false);
       setGeneratingStatus("");
     }
   }
 
+  // Delete a study set
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     if (!confirm("Delete this study set?")) return;
@@ -126,10 +145,12 @@ export default function QuizBuilderPage() {
     }
   }
 
+  // Clear paste text area
   function handleClear() {
     setPasteText("");
   }
 
+  // Loading state
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -140,6 +161,7 @@ export default function QuizBuilderPage() {
 
   if (!user) return null;
 
+  // Generating state - show progress screen
   if (generating) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
@@ -147,9 +169,7 @@ export default function QuizBuilderPage() {
           <Sparkles size={28} className="text-muted-foreground" />
         </div>
         <h2 className="text-xl font-medium text-foreground mb-2">{generatingStatus}</h2>
-        <p className="text-sm text-muted-foreground">
-          This may take a moment
-        </p>
+        <p className="text-sm text-muted-foreground">This may take a moment</p>
       </div>
     );
   }
@@ -175,7 +195,7 @@ export default function QuizBuilderPage() {
       </header>
 
       <main className="max-w-4xl mx-auto p-6 pb-32">
-        {/* Tabs */}
+        {/* Tab Navigation */}
         <div className="flex gap-1 p-1 bg-muted/50 rounded-lg w-fit mb-8">
           <button
             onClick={() => setActiveTab("study-sets")}
@@ -197,7 +217,7 @@ export default function QuizBuilderPage() {
           >
             Paste Text
           </button>
-          {/* Flashcards - Disabled */}
+          {/* Flashcards - Coming Soon */}
           <button
             disabled
             className="px-4 py-2 text-sm font-medium rounded-md text-muted-foreground/50 cursor-not-allowed flex items-center gap-2"
@@ -205,14 +225,14 @@ export default function QuizBuilderPage() {
           >
             <Layers size={14} />
             Flashcards
-            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"></span>
+            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">Soon</span>
           </button>
         </div>
 
         {/* Study Sets Tab */}
         {activeTab === "study-sets" && (
           <div>
-            {/* Create Button */}
+            {/* Create New Button */}
             <button
               onClick={() => setShowModal(true)}
               className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-colors mb-6"
@@ -221,12 +241,14 @@ export default function QuizBuilderPage() {
               <span className="font-medium">Create new study set</span>
             </button>
 
+            {/* Empty State */}
             {quizzes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <FileText size={40} className="text-muted-foreground/30 mb-4" />
                 <p className="text-muted-foreground">No study sets yet</p>
               </div>
             ) : (
+              /* Quiz List */
               <div className="space-y-2">
                 {quizzes.map(quiz => (
                   <div
@@ -245,6 +267,7 @@ export default function QuizBuilderPage() {
                         </p>
                       </div>
                     </div>
+                    {/* Action Buttons - Visible on Hover */}
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       {quiz.questions.length > 0 && (
                         <button
@@ -276,6 +299,7 @@ export default function QuizBuilderPage() {
         {/* Paste Text Tab */}
         {activeTab === "paste-text" && (
           <div>
+            {/* Text Input */}
             <textarea
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
@@ -283,6 +307,7 @@ export default function QuizBuilderPage() {
               className="w-full h-64 p-4 bg-card border border-border rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none text-sm leading-relaxed"
             />
             
+            {/* Character Count & Clear */}
             <div className="flex justify-between items-center mt-3">
               <button
                 onClick={handleClear}
@@ -305,6 +330,7 @@ export default function QuizBuilderPage() {
               )}
             </div>
             
+            {/*Show when text is valid */}
             {isValidLength && (
               <div className="mt-6 p-5 bg-card border border-border rounded-xl">
                 <h3 className="font-medium mb-4">Question Types</h3>
@@ -347,6 +373,7 @@ export default function QuizBuilderPage() {
                   </label>
                 </div>
                 
+                {/* Question Count Selector */}
                 <div className="mt-4 flex items-center gap-3">
                   <span className="text-sm text-muted-foreground">Number of questions:</span>
                   <select
@@ -366,7 +393,7 @@ export default function QuizBuilderPage() {
         )}
       </main>
 
-      {/* Bottom Bar */}
+      {/* Bottom Generate Bar */}
       {activeTab === "paste-text" && (
         <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border p-4">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -385,7 +412,7 @@ export default function QuizBuilderPage() {
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* Create Study Set Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-lg">

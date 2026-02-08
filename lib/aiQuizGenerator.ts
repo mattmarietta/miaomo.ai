@@ -1,5 +1,6 @@
 import { Question, generateId } from "./firebase/quizStore";
 
+// AI response format before conversion to our Question type
 type AIQuestion = {
   type: "multiple-choice" | "true-false" | "written" | "matching";
   question: string;
@@ -9,6 +10,12 @@ type AIQuestion = {
   explanation?: string;
 };
 
+/**
+ * Generates quiz questions from text using Gemini AI
+ * @param text - Study material to generate questions from
+ * @param count - Number of questions to generate
+ * @param types - Array of question types to include
+ */
 export async function generateQuestionsFromText(
   text: string,
   count: number = 10,
@@ -17,9 +24,10 @@ export async function generateQuestionsFromText(
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("No Gemini API key found. Add NEXT_PUBLIC_GEMINI_API_KEY to your .env.local file.");
+    throw new Error("Gemini API key not configured");
   }
 
+  // Build instructions for each question type
   const typeInstructions = types.map(t => {
     switch (t) {
       case "multiple-choice":
@@ -35,6 +43,7 @@ export async function generateQuestionsFromText(
     }
   }).filter(Boolean).join("\n");
 
+  // Prompt for AI to generate questions
   const prompt = `Create exactly ${count} quiz questions from this study material. 
 Use ONLY these question types: ${types.join(", ")}
 
@@ -43,7 +52,7 @@ ${typeInstructions}
 
 Study material:
 """
-${text}
+${text.substring(0, 15000)}
 """
 
 Return ONLY a valid JSON array with no extra text. Each question should follow this format:
@@ -62,102 +71,99 @@ For matching:
 
 Return ONLY the JSON array, no markdown, no explanation.`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { 
-            temperature: 0.7, 
-            maxOutputTokens: 8192 
-          },
-        }),
-      }
-    );
+  // Call Gemini API
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { 
+          temperature: 0.7, 
+          maxOutputTokens: 8192 
+        },
+      }),
+    }
+  );
 
-    if (!res.ok) {
-      const errorData = await res.json();
-      console.error("Gemini API error:", errorData);
-      throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`API request failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  if (!responseText) {
+    throw new Error("Empty response from API");
+  }
+
+  // Extract JSON from response (may be wrapped in markdown code blocks)
+  let jsonStr = responseText;
+  
+  const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1];
+  }
+  
+  jsonStr = jsonStr.trim();
+  
+  // Find array if not at start of string
+  if (!jsonStr.startsWith("[")) {
+    const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      jsonStr = arrayMatch[0];
+    }
+  }
+
+  const aiQuestions: AIQuestion[] = JSON.parse(jsonStr);
+
+  if (!Array.isArray(aiQuestions)) {
+    throw new Error("Invalid response format");
+  }
+
+  // Convert AI response to our Question format
+  return aiQuestions.map((aq: AIQuestion) => {
+    const q: Question = {
+      id: generateId(),
+      type: aq.type,
+      question: aq.question || "",
+      correctAnswer: aq.correctAnswer || "",
+      points: 1,
+      box: 1,
+    };
+
+    // Only add explanation if it exists (Firebase doesn't accept undefined)
+    if (aq.explanation) {
+      q.explanation = aq.explanation;
     }
 
-    const data = await res.json();
-    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    if (!responseText) {
-      throw new Error("Empty response from Gemini");
-    }
-
-    let jsonStr = responseText;
-    
-    const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-      jsonStr = codeBlockMatch[1];
-    }
-    
-    jsonStr = jsonStr.trim();
-    
-    if (!jsonStr.startsWith("[")) {
-      const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        jsonStr = arrayMatch[0];
-      }
-    }
-
-    let aiQuestions: AIQuestion[];
-    try {
-      aiQuestions = JSON.parse(jsonStr);
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError);
-      console.error("Raw response:", responseText);
-      throw new Error("Failed to parse AI response as JSON");
-    }
-
-    if (!Array.isArray(aiQuestions)) {
-      throw new Error("AI response is not an array");
-    }
-
-    return aiQuestions.map((aq: AIQuestion) => {
-      const q: Question = {
-        id: generateId(),
-        type: aq.type,
-        question: aq.question || "",
-        correctAnswer: aq.correctAnswer || "",
-        explanation: aq.explanation,
-        points: 1,
-        box: 1,
-      };
-
-      if (aq.type === "multiple-choice" && aq.options) {
-        q.options = aq.options.map((text: string) => ({ id: generateId(), text }));
-        const correctIndex = aq.options.findIndex((opt: string) => opt === aq.correctAnswer);
-        if (correctIndex >= 0 && q.options[correctIndex]) {
-          q.correctAnswer = q.options[correctIndex].id;
-        } else {
-          const letterIndex = ["A", "B", "C", "D"].indexOf(aq.correctAnswer || "");
-          if (letterIndex >= 0 && q.options[letterIndex]) {
-            q.correctAnswer = q.options[letterIndex].id;
-          }
+    // Handle multiple choice options
+    if (aq.type === "multiple-choice" && aq.options) {
+      q.options = aq.options.map((text: string) => ({ id: generateId(), text }));
+      
+      // Find correct answer by matching text or letter (A, B, C, D)
+      const correctIndex = aq.options.findIndex((opt: string) => opt === aq.correctAnswer);
+      if (correctIndex >= 0 && q.options[correctIndex]) {
+        q.correctAnswer = q.options[correctIndex].id;
+      } else {
+        const letterIndex = ["A", "B", "C", "D"].indexOf(aq.correctAnswer || "");
+        if (letterIndex >= 0 && q.options[letterIndex]) {
+          q.correctAnswer = q.options[letterIndex].id;
         }
       }
+    }
 
-      if (aq.type === "matching" && aq.matchingPairs) {
-        q.matchingPairs = aq.matchingPairs.map((p: { term: string; definition: string }) => ({
-          id: generateId(),
-          term: p.term,
-          definition: p.definition,
-        }));
-        q.points = aq.matchingPairs.length;
-      }
+    // Handle matching pairs
+    if (aq.type === "matching" && aq.matchingPairs) {
+      q.matchingPairs = aq.matchingPairs.map((p: { term: string; definition: string }) => ({
+        id: generateId(),
+        term: p.term,
+        definition: p.definition,
+      }));
+      q.points = aq.matchingPairs.length;
+    }
 
-      return q;
-    });
-
-  } catch (err) {
-    console.error("Generate questions error:", err);
-    throw err;
-  }
+    return q;
+  });
 }

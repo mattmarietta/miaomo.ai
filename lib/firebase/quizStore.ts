@@ -13,19 +13,23 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
+// Question types supported by the quiz builder
 export type QuestionType = "multiple-choice" | "true-false" | "written" | "matching";
 
+// Multiple choice option
 export type Option = {
   id: string;
   text: string;
 };
 
+// Matching question pair
 export type MatchingPair = {
   id: string;
   term: string;
   definition: string;
 };
 
+// Individual question in a quiz
 export type Question = {
   id: string;
   type: QuestionType;
@@ -39,6 +43,7 @@ export type Question = {
   lastAnsweredCorrectly?: boolean;
 };
 
+// Quiz/study set containing questions
 export type Quiz = {
   id: string;
   userId: string;
@@ -49,6 +54,7 @@ export type Quiz = {
   updatedAt: Date;
 };
 
+// Record of a user's quiz attempt
 export type QuizAttempt = {
   id: string;
   quizId: string;
@@ -60,13 +66,16 @@ export type QuizAttempt = {
   completedAt: Date;
 };
 
+// Generate random ID for questions/options
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
+// Firestore collection references
 const quizzesCollection = collection(db, "quizzes");
 const attemptsCollection = collection(db, "quizAttempts");
 
+// Create a new quiz
 export async function createQuiz(
   userId: string,
   title: string,
@@ -75,9 +84,9 @@ export async function createQuiz(
   const now = Timestamp.now();
 
   const docRef = await addDoc(quizzesCollection, {
-    userId: userId,
-    title: title,
-    description: description,
+    userId,
+    title,
+    description,
     questions: [],
     createdAt: now,
     updatedAt: now,
@@ -85,15 +94,16 @@ export async function createQuiz(
 
   return {
     id: docRef.id,
-    userId: userId,
-    title: title,
-    description: description,
+    userId,
+    title,
+    description,
     questions: [],
     createdAt: now.toDate(),
     updatedAt: now.toDate(),
   };
 }
 
+// Get a single quiz by ID
 export async function getQuiz(quizId: string): Promise<Quiz | null> {
   const docRef = doc(db, "quizzes", quizId);
   const snapshot = await getDoc(docRef);
@@ -114,6 +124,7 @@ export async function getQuiz(quizId: string): Promise<Quiz | null> {
   };
 }
 
+// Get all quizzes for a user, sorted by most recent
 export async function getUserQuizzes(userId: string): Promise<Quiz[]> {
   const q = query(
     quizzesCollection,
@@ -140,6 +151,7 @@ export async function getUserQuizzes(userId: string): Promise<Quiz[]> {
   return quizzes;
 }
 
+// Update quiz fields
 export async function updateQuiz(
   quizId: string,
   updates: {
@@ -149,17 +161,52 @@ export async function updateQuiz(
   }
 ): Promise<void> {
   const docRef = doc(db, "quizzes", quizId);
-  await updateDoc(docRef, {
-    ...updates,
+  
+  // Clean updates to remove undefined values
+  const cleanUpdates: Record<string, unknown> = {
     updatedAt: Timestamp.now(),
-  });
+  };
+  
+  if (updates.title !== undefined) {
+    cleanUpdates.title = updates.title;
+  }
+  
+  if (updates.description !== undefined) {
+    cleanUpdates.description = updates.description;
+  }
+  
+  if (updates.questions !== undefined) {
+    cleanUpdates.questions = updates.questions.map(q => {
+      const cleanQ: Record<string, unknown> = {
+        id: q.id,
+        type: q.type,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        points: q.points,
+        box: q.box,
+      };
+      
+      if (q.options) cleanQ.options = q.options;
+      if (q.matchingPairs) cleanQ.matchingPairs = q.matchingPairs;
+      if (q.explanation) cleanQ.explanation = q.explanation;
+      if (q.lastAnsweredCorrectly !== undefined) {
+        cleanQ.lastAnsweredCorrectly = q.lastAnsweredCorrectly;
+      }
+      
+      return cleanQ;
+    });
+  }
+  
+  await updateDoc(docRef, cleanUpdates);
 }
 
+// Delete a quiz
 export async function deleteQuiz(quizId: string): Promise<void> {
   const docRef = doc(db, "quizzes", quizId);
   await deleteDoc(docRef);
 }
 
+// Save a quiz attempt
 export async function saveQuizAttempt(
   quizId: string,
   userId: string,
@@ -168,15 +215,20 @@ export async function saveQuizAttempt(
   totalPoints: number,
   matchingAnswers?: Record<string, Record<string, string>>
 ): Promise<QuizAttempt> {
-  const docRef = await addDoc(attemptsCollection, {
+  const attemptData: Record<string, unknown> = {
     quizId,
     userId,
     answers,
-    matchingAnswers,
     score,
     totalPoints,
     completedAt: Timestamp.now(),
-  });
+  };
+  
+  if (matchingAnswers) {
+    attemptData.matchingAnswers = matchingAnswers;
+  }
+
+  const docRef = await addDoc(attemptsCollection, attemptData);
 
   return {
     id: docRef.id,
@@ -190,6 +242,7 @@ export async function saveQuizAttempt(
   };
 }
 
+// Get user's quiz attempts
 export async function getUserAttempts(
   userId: string,
   quizId?: string
