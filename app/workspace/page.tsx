@@ -72,29 +72,29 @@ export default function Chat() {
     const [ocrError, setOcrError] = useState<string | null>(null);
 
     const handleFilesUpload = async (files: File[]) => {
-    setOcrError(null);
-    setOcrLoading(true);
-    try {
-        const form = new FormData();
-        files.forEach((f) => form.append("files", f));
+        setOcrError(null);
+        setOcrLoading(true);
+        try {
+            const form = new FormData();
+            files.forEach((f) => form.append("files", f));
 
-        const res = await fetch("/api/vision", { method: "POST", body: form });
+            const res = await fetch("/api/vision", { method: "POST", body: form });
 
-        if (!res.ok) {
-        const text = await res.text().catch(()=>res.statusText);
-        setOcrError(`Server error: ${res.status} ${text?.slice?.(0,200) || ""}`);
-        setOcrLoading(false);
-        return;
-        }
-
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        setPreviewPdfUrl(url);
-        } catch (err: any) {
-            setOcrError(err?.message || "Upload failed");
-        } finally {
+            if (!res.ok) {
+            const text = await res.text().catch(()=>res.statusText);
+            setOcrError(`Server error: ${res.status} ${text?.slice?.(0,200) || ""}`);
             setOcrLoading(false);
-        }
+            return;
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            setPreviewPdfUrl(url);
+            } catch (err: any) {
+                setOcrError(err?.message || "Upload failed");
+            } finally {
+                setOcrLoading(false);
+            }
     };
 
     return (
