@@ -1,17 +1,21 @@
-import { convertToModelMessages, streamText, UIMessage } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { NextRequest, NextResponse } from "next/server";
+import { ragChain } from "@/lib/rag/rag";
 
-// Allow streaming responses up to 30 seconds
-export const maxDuration = 30;
+export async function POST(request: NextRequest) {
+  try {
+    const { question, docId } = await request.json();
+    const userId = request.headers.get("x-user-id");
 
-export async function POST(req: Request) {
-    const { messages }: { messages: UIMessage[] } = await req.json();
+    if (!userId) {
+      return NextResponse.json({ error: "Missing user ID" }, { status: 401 });
+    }
 
-    const result = streamText({
-        model: anthropic("claude-opus-4-5"),
-        system: "You are a helpful assistant for answering questions related to user uploaded documents.",
-        messages: await convertToModelMessages(messages),
-    });
-
-    return result.toUIMessageStreamResponse();
+    const result = await ragChain({ question, userId, docId });
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed" },
+      { status: 500 }
+    );
+  }
 }
