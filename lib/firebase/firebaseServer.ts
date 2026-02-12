@@ -2,18 +2,24 @@ import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
-if(!getApps().length) {
+if (!getApps().length) {
+  console.log("ENV CHECK:", {
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+  });
   initializeApp({
     credential: cert({
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY,
-
     })
   })
+  // Must call settings() here — only once, before any other Firestore calls
+  getFirestore().settings({ ignoreUndefinedProperties: true })
 }
 
 const serverDB = getFirestore()
 export const serverAuth = getAuth()
 
-export {serverDB}
+export { serverDB }

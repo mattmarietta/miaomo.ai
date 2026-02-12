@@ -37,3 +37,13 @@ export const chatSchema = z.object({
 
 export type DBChatSchema = z.infer<typeof chatSchema>;
 
+export const dbMessageSchema = z.object({
+  chatId: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  parts: z.array(z.any()),
+  metadata: z.any().optional(),
+  attachments: z.array(z.any()).optional(),
+});
+
+export type DBMessageSchema = z.infer<typeof dbMessageSchema>;
+
