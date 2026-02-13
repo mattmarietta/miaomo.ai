@@ -39,6 +39,7 @@ export type DBChatSchema = z.infer<typeof chatSchema>;
 
 export const dbMessageSchema = z.object({
   chatId: z.string(),
+  userId: z.string(),
   role: z.enum(["user", "assistant", "system"]),
   parts: z.array(z.any()),
   metadata: z.any().optional(),

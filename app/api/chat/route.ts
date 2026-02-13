@@ -72,6 +72,7 @@ export async function POST(req: Request) {
         await saveMessage(
             {
                 chatId: id,
+                userId: auth.userId,
                 role: "user",
                 parts: message?.parts!,
             })
@@ -109,6 +110,7 @@ export async function POST(req: Request) {
                 console.dir((responseMessage))
                 await saveMessage(
                     {
+                        userId: auth.userId,
                         chatId: id,
                         role: responseMessage.role,
                         parts: responseMessage.parts,

@@ -20,6 +20,8 @@ interface ChatTab {
   title: string;
 }
 
+const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
+
 
 export function Chat({user}: {user: User}) {
    

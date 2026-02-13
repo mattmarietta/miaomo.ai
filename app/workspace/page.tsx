@@ -16,7 +16,6 @@ import { User } from "firebase/auth";
 import { Chat } from "@/components/chat/Chat";
 
 
-const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
 
 export default function ChatPage() {
     const { user, loading, logout } = useAuth();

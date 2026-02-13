@@ -30,19 +30,18 @@ export async function saveChat({ id, userId, title }: Pick<DBChatSchema, "id" | 
 
 
 }
-export async function saveMessage({ chatId, parts, role, metadata, attachments }: DBMessageSchema) {
+export async function saveMessage({ chatId, parts, role, userId, metadata, attachments }: DBMessageSchema) {
   try {
-    // JSON round-trip strips undefined values that Firestore rejects
-    const cleanData = JSON.parse(JSON.stringify({
+    const result = await messagesCollection.add({
       chatId,
+      userId,
       role,
       parts,
-      metadata: metadata ?? null,
-      attachments: attachments ?? [],
-      createdAt: new Date().toISOString(),
-      updatedAt: null,
-    }))
-    await messagesCollection.add(cleanData)
+      metadata: [],
+      attachments: [],
+      createdAt: new Date(),
+    })
+    console.log(result)
   } catch (err) {
     console.error('Error saving chat:', err);
     return { success: false, error: 'Failed to save chat' };

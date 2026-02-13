@@ -4,6 +4,8 @@ import { useAuth } from "@/components/Auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
+import { Chat } from "@/components/chat/Chat";
+import { fetchChatMessages, fetchChatMessagesById } from "@/lib/firebase/chatStore";
 
 export default function Page() {
   const { id } = useParams<{ id: string }>();
@@ -11,10 +13,20 @@ export default function Page() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if(loading) return;
+    if (!user) {
       router.push("/login");
+      return;
     }
-  }, [user, loading, router]);
+
+    const getAllMsg = async () => {
+      console.log("called")
+      const msg = await fetchChatMessagesById(id, user.uid);
+      console.log(msg)
+    }
+    getAllMsg()
+  }, [user, loading, router, id]);
+
 
   if (loading) {
     return (
@@ -26,5 +38,9 @@ export default function Page() {
 
   if (!user) return null;
 
-  return <div>hey {id}</div>;
+
+
+
+
+  return <Chat user={user} />
 }
