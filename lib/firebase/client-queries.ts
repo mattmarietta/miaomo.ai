@@ -1,13 +1,9 @@
 import { db } from "@/lib/firebase/firebase";
 import { collection, addDoc, getDocs, Timestamp, query, where, orderBy, onSnapshot } from "firebase/firestore";
-import { chatSchema, DBChatSchema } from "@/lib/firebase/schema";
-import { CarTaxiFrontIcon } from "lucide-react";
-export type ChatMessage = {
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    createdAt: Date;
-};
+import { chatSchema, DBChatSchema, DBMessageSchema } from "@/lib/firebase/schema";
+import { ChatAgent } from "@/app/api/chat/ai";
+import { ChatMessage } from "@/lib/firebase/server-queries";
+
 
 const chatsCollection = collection(db, "chats");
 const messagesCollection = collection(db, "messages");
@@ -39,21 +35,7 @@ export async function createChatMessage(role: "user" | "assistant", content: str
     return { id: ref.id, role, content, createdAt: new Date() };
 }
 
-// READ (all)
-export async function fetchChatMessages(): Promise<ChatMessage[]> {
-    const snap = await getDocs(messagesCollection);
-    return snap.docs.map((doc) => {
-        const data = doc.data() as ChatMessage
-        return {
-            ...data,
-            id: doc.id,
-            role: data.role,
-            content: data.content,
-            createdAt: data.createdAt
-        };
-    });
-}
-export async function fetchChatMessagesById(id: string, userId: string): Promise<ChatMessage[]> {
+export async function fetchChatMessagesById(id: string, userId: string): Promise<ChatAgent[]> {
     const q = query(
         messagesCollection,
         where("chatId", "==", id),
@@ -62,13 +44,12 @@ export async function fetchChatMessagesById(id: string, userId: string): Promise
     )
     const snap = await getDocs(q);
     return snap.docs.map((doc) => {
-        const data = doc.data() as ChatMessage
+        const data = doc.data() as DBMessageSchema
         return {
             ...data,
             id: doc.id,
             role: data.role,
-            content: data.content,
-            createdAt: data.createdAt
+            parts: data.parts,
         };
     });
 }

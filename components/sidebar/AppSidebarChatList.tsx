@@ -4,7 +4,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar"
-import { subscribeChatsByUserId } from "@/lib/firebase/chatStore"
+import { subscribeChatsByUserId } from "@/lib/firebase/client-queries"
 import { DBChatSchema } from "@/lib/firebase/schema"
 import { Plus } from "lucide-react"
 import Link from "next/link"

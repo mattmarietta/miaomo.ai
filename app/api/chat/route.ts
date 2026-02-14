@@ -3,7 +3,7 @@ import { object, string, z } from "zod"
 import { messageSchema, userMessageSchema } from "@/lib/firebase/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { serverAuth } from "@/lib/firebase/firebaseServer";
-import { getChatById, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById } from "@/lib/server/queries";
+import { getChatById, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById } from "@/lib/firebase/server-queries";
 import { aiAgent, generateTitleFromUserMessage } from "@/app/api/chat/ai";
 import { createVertex } from "@ai-sdk/google-vertex/edge";
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -91,12 +91,6 @@ export async function POST(req: Request) {
 
                 writer.merge(result.toUIMessageStream({ sendReasoning: true }))
 
-
-
-                // if (titlePromise) {
-                //     const title = await titlePromise;
-                //     writer.write({ type: "data-title", data: { title } });
-                // }
                 if (titlePromise) {
                     const title = await titlePromise
                     if (title) await updateChatTitleById({ id, title })
@@ -124,12 +118,6 @@ export async function POST(req: Request) {
 
     }
     return;
-    // const stream = createUIMessageStream({
-    //     originalMessages: uiMessages,
-    //     execute: async({writer: dataStream}) => {
-
-    //     }
-    // })
 
 
 }

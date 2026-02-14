@@ -4,12 +4,6 @@ import { collection, addDoc, getDocs, Timestamp } from "firebase/firestore";
 import { chatSchema, DBChatSchema, DBMessageSchema } from "@/lib/firebase/schema";
 import { CarTaxiFrontIcon } from "lucide-react";
 import { NextResponse } from "next/server";
-export type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  createdAt: Date;
-};
 
 const chatsCollection = serverDB.collection("chats")
 const messagesCollection = serverDB.collection("messages")

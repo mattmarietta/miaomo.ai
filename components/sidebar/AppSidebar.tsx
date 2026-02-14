@@ -14,11 +14,10 @@ import { ChevronRight } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 export function AppSidebar() {
-  const chats = [{ id: "alskfjalksfj", title: "What is r-22", createdAt: new Date() }]
   const pathname = usePathname()
 
   return (
-    <Sidebar className="" variant="inset" collapsible="icon">
+    <Sidebar className="" variant="inset" >
       <SidebarRail />
 
       <AppSidebarHeader pathname={pathname} />

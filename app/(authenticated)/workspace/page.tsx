@@ -39,6 +39,6 @@ export default function ChatPage() {
         return null;
     }
 
-    return <Chat user={user} />
+    return <Chat user={user} initialMessages={[]} />
 }
 
