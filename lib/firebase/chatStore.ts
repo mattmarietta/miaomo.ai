@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, addDoc, getDocs, Timestamp, query, where, orderBy } from "firebase/firestore";
+import { collection, addDoc, getDocs, Timestamp, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { chatSchema, DBChatSchema } from "@/lib/firebase/schema";
 import { CarTaxiFrontIcon } from "lucide-react";
 export type ChatMessage = {
@@ -71,4 +71,36 @@ export async function fetchChatMessagesById(id: string, userId: string): Promise
             createdAt: data.createdAt
         };
     });
+}
+export async function fetchChatsByUserId(userId: string): Promise<DBChatSchema[]> {
+    const q = query(
+        chatsCollection,
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc")
+    )
+    const snap = await getDocs(q);
+    return snap.docs.map((doc) => {
+        return doc.data() as DBChatSchema
+
+    });
+}
+/** Subscribe to real-time chat list updates for a user. Returns an unsubscribe function. */
+export function subscribeChatsByUserId(
+    userId: string,
+    onChats: (chats: DBChatSchema[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const q = query(
+        chatsCollection,
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc")
+    );
+    return onSnapshot(
+        q,
+        (snap) => {
+            const chats = snap.docs.map((doc) => doc.data() as DBChatSchema);
+            onChats(chats);
+        },
+        (err) => onError?.(err),
+    );
 }

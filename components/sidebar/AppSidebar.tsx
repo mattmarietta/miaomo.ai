@@ -18,7 +18,7 @@ export function AppSidebar() {
   const pathname = usePathname()
 
   return (
-    <Sidebar className="" variant="inset">
+    <Sidebar className="" variant="inset" collapsible="icon">
       <SidebarRail />
 
       <AppSidebarHeader pathname={pathname} />
@@ -28,10 +28,10 @@ export function AppSidebar() {
         <Collapsible title="Chats" defaultOpen>
           <SidebarGroup>
 
-            <SidebarGroupLabel asChild className="group/label hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sm"
+            <SidebarGroupLabel asChild className="group/label text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sm"
 
             >
-              <CollapsibleTrigger>
+              <CollapsibleTrigger className={""}>
                 Chats
                 <ChevronRight className="size-4 ml-auto transition-transform group-data-panel-open/label:rotate-90" />
               </CollapsibleTrigger>
