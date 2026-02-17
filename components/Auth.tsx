@@ -3,13 +3,12 @@
 import { auth } from "@/lib/firebase/firebase";
 import {
   onAuthStateChanged,
-  fetchSignInMethodsForEmail,
+  linkWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   GithubAuthProvider,
   signInWithPopup,
-  linkWithPopup,
   signOut,
   type User,
   type AuthProvider as FirebaseAuthProvider
@@ -49,16 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await createUserWithEmailAndPassword(auth, email, password);
   };
 
-  const loginWithGoogle = async (email?: string) => {
-    if (email) {
-      const methods = await fetchSignInMethodsForEmail(auth, email);
-
-      if (methods.length > 0 && !methods.includes("google.com")) {
-        alert(`An account with this email already exists with ${methods[0]}. Please sign in first, then link your Google account in your settings.`);
-        return;
-      }
-    }
-
+  const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   };
