@@ -9,6 +9,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import FileUploader from "@/components/FileUploader";
 import Markdown from "react-markdown";
+import { DefaultChatTransport } from "ai";
+import { useAuth } from "@/components/Auth";
+import { useRouter } from "next/navigation";
+import { ChatAgent } from "@/app/api/chat/ai";
+import { User } from "firebase/auth";
+
 
 interface ChatTab {
     id: string;
@@ -17,8 +23,17 @@ interface ChatTab {
 
 const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
 
-export default function Chat() {
-    const { messages, sendMessage, status } = useChat();
+
+export function Chat({ user, initialMessages }: { user: User, initialMessages: ChatAgent[] }) {
+
+
+    const { messages, sendMessage, status } = useChat<ChatAgent>({
+
+        transport: new DefaultChatTransport({
+            api: "/api/chat",
+        }),
+        messages: initialMessages,
+    });
     const [input, setInput] = useState("");
     const [tabs, setTabs] = useState<ChatTab[]>([{ id: "chat-1", title: "New Chat" }]);
     const [activeTab, setActiveTab] = useState("chat-1");
@@ -59,34 +74,69 @@ export default function Chat() {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+
+
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const idToken = await user.getIdToken()
         if (input.trim()) {
-            sendMessage({ text: input });
+            sendMessage({ text: input }, {
+                headers: {
+                    "Authorization": `Bearer ${idToken}`
+                }
+            });
             setInput("");
         }
     };
 
+    const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+    const [ocrLoading, setOcrLoading] = useState(false);
+    const [ocrError, setOcrError] = useState<string | null>(null);
+
+    const handleFilesUpload = async (files: File[]) => {
+        setOcrError(null);
+        setOcrLoading(true);
+        try {
+            const form = new FormData();
+            files.forEach((f) => form.append("files", f));
+
+            const res = await fetch("/api/vision", { method: "POST", body: form });
+
+            if (!res.ok) {
+            const text = await res.text().catch(()=>res.statusText);
+            setOcrError(`Server error: ${res.status} ${text?.slice?.(0,200) || ""}`);
+            setOcrLoading(false);
+            return;
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            setPreviewPdfUrl(url);
+            } catch (err: any) {
+                setOcrError(err?.message || "Upload failed");
+            } finally {
+                setOcrLoading(false);
+            }
+    };
+
     return (
-        <div className="flex h-dvh w-full overflow-hidden bg-background">
-            {/* Left Side */}
-            <div className="flex flex-col flex-1 min-w-0 bg-muted/30">
-                {/* Top Section / PDF Viewer Area */}
-                <main className="grow flex items-center justify-center overflow-auto p-4">
-                    <div className="text-muted-foreground">
-                        PDF Preview Space
-                    </div>
-                </main>
-                
-                {/* Bottom Section */}
-                <div className="h-24 shrink-0 border-t border-border/50 bg-background/50 flex items-center justify-center">
+        <div className="flex flex-1 min-h-0 bg-background">
+            {/* PDF Viewer Area */}
+            <div className="grow min-w-0 flex items-center justify-center bg-muted/30">
+                <div className="flex flex-col items-center gap-3">
+                    <FileText size={32} className="text-muted-foreground/50" strokeWidth={1.5} />
+                    <p className="text-xs text-muted-foreground">Drop a PDF here</p>
+                    {/* Bottom Section */}
+                    <div className="h-24 shrink-0 border-t border-border/50 bg-background/50 flex items-center justify-center">
                         {/* Uploader */}
-                        <FileUploader />
+                        {/* <FileUploader onUpload={handleFilesUpload} /> */}
+                    </div>
                 </div>
             </div>
 
-            <div className="flex flex-col flex-1 min-w-0 border-l border-border bg-card">
-                {/* Chat Panel */}
+            {/* Chat Panel */}
+            <div className="flex h-full min-h-0 overflow-hidden flex-col w-full max-w-lg border-l border-border">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                     {/* Tab Bar */}
                     <div className="flex items-center gap-1 px-2 py-2 border-b border-border">

@@ -55,7 +55,7 @@ export default function DashboardPage() {
   */
 
     return (
-        <main className="min-h-screen bg-black text-white p-6">
+        <main className=" bg-white text-white p-6">
             {/* Header */}
             <header className="max-w-5xl mx-auto flex items-center justify-between">
                 <div>
