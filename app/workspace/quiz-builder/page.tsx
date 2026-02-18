@@ -225,7 +225,7 @@ export default function QuizBuilderPage() {
           >
             <Layers size={14} />
             Flashcards
-            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">Soon</span>
+            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"></span>
           </button>
         </div>
 
