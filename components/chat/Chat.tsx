@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import FileUploader from "@/components/FileUploader";
 import Markdown from "react-markdown";
 import { DefaultChatTransport } from "ai";
 import { useAuth } from "@/components/Auth";
@@ -88,6 +89,37 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
             setInput("");
         }
     };
+
+    const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+    const [ocrLoading, setOcrLoading] = useState(false);
+    const [ocrError, setOcrError] = useState<string | null>(null);
+
+    const handleFilesUpload = async (files: File[]) => {
+        setOcrError(null);
+        setOcrLoading(true);
+        try {
+            const form = new FormData();
+            files.forEach((f) => form.append("files", f));
+
+            const res = await fetch("/api/vision", { method: "POST", body: form });
+
+            if (!res.ok) {
+            const text = await res.text().catch(()=>res.statusText);
+            setOcrError(`Server error: ${res.status} ${text?.slice?.(0,200) || ""}`);
+            setOcrLoading(false);
+            return;
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            setPreviewPdfUrl(url);
+            } catch (err: any) {
+                setOcrError(err?.message || "Upload failed");
+            } finally {
+                setOcrLoading(false);
+            }
+    };
+
     return (
         <div className="flex flex-1 min-h-0 bg-background">
             {/* PDF Viewer Area */}
@@ -95,6 +127,11 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
                 <div className="flex flex-col items-center gap-3">
                     <FileText size={32} className="text-muted-foreground/50" strokeWidth={1.5} />
                     <p className="text-xs text-muted-foreground">Drop a PDF here</p>
+                    {/* Bottom Section */}
+                    <div className="h-24 shrink-0 border-t border-border/50 bg-background/50 flex items-center justify-center">
+                        {/* Uploader */}
+                        {/* <FileUploader onUpload={handleFilesUpload} /> */}
+                    </div>
                 </div>
             </div>
 
@@ -180,9 +217,9 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
                             </div>
 
                             {/* Input Area */}
-                            <div className="px-4 pb-4">
-                                <form onSubmit={handleSubmit}>
-                                    <div className="rounded-3xl border border-border bg-card shadow-xs focus-within:ring-2 focus-within:ring-ring/20 transition-shadow">
+                            <div className="w-full px-4 pb-6 flex flex-col items-center">
+                                <form onSubmit={handleSubmit} className="w-full">
+                                    <div className="w-full rounded-3xl border border-border bg-card shadow-xs focus-within:ring-2 focus-within:ring-ring/20 transition-shadow">
                                         <textarea
                                             ref={textareaRef}
                                             className="w-full px-4 pt-3 pb-2 text-sm bg-transparent resize-none focus:outline-none leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] placeholder:text-muted-foreground"

@@ -46,3 +46,7 @@ next-env.d.ts
 # we use pnpm
 package-lock.json
 
+# Firebase / GCP service account keys
+*-firebase-adminsdk-*.json
+*service-account*.json
+*.key.json
