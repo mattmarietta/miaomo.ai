@@ -4,9 +4,13 @@ import React, { useState, useRef } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/firebase";
 import { Button } from "@/components/ui/button";
-import { CircleDivide, CirclePlus, Loader2 } from "lucide-react";
+import { CirclePlus, Loader2 } from "lucide-react";
 
-export default function FileUploader() {
+type FileUploaderProps = {
+    onUpload?: (payload: { file: File; downloadUrl: string }) => void;
+};
+
+export default function FileUploader({ onUpload }: FileUploaderProps) {
     const [progress, setProgress] = useState<number>(0);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -15,6 +19,10 @@ export default function FileUploader() {
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+
+        //allow re-uploading same file later
+        e.currentTarget.value = "";
+
         if (!file) return;
 
         setUploading(true);
@@ -39,10 +47,14 @@ export default function FileUploader() {
                 setUploading(false);
             },
             async () => {
-                const url = await getDownloadURL(uploadTask.snapshot.ref);
-                console.log("File available at: ", url);
-                setUploading(false);
-                setProgress(0);
+                try{
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+                    await onUpload?.({ file, downloadUrl: url });
+                    console.log("File available at: ", url);
+                }finally{
+                    setUploading(false);
+                    setProgress(0);
+                }
             }
         );
     };
@@ -53,7 +65,7 @@ export default function FileUploader() {
                 type="file" 
                 ref={fileInputRef} 
                 onChange={handleUpload} 
-                accept=".pdf" // Restrict to PDFs for your viewer
+                accept="application/pdf,image/*" //accept PDFs and imgs
                 className="hidden" 
             />
             <Button 

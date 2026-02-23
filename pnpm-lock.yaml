@@ -21,6 +21,9 @@ importers:
       '@ai-sdk/react':
         specifier: ^3.0.60
         version: 3.0.60(react@19.2.4)(zod@4.1.13)
+      '@google-cloud/documentai':
+        specifier: ^9.5.0
+        version: 9.5.0
       '@google-cloud/vision':
         specifier: ^5.3.4
         version: 5.3.4
@@ -495,6 +498,10 @@ packages:
 
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+
+  '@google-cloud/documentai@9.5.0':
+    resolution: {integrity: sha512-8oL0eoVliU2T4TC1ZtZpEDsRIc1QxTpnizXJfy7Nu2DqBQy+QaHAOfnZuD2wYZj3X1TxFHE1GxXk1bVsMLtxLA==}
+    engines: {node: '>=18'}
 
   '@google-cloud/promisify@5.0.0':
     resolution: {integrity: sha512-N8qS6dlORGHwk7WjGXKOSsLjIjNINCPicsOX6gyyLiYk7mq3MtII96NZ9N2ahwA2vnkLmZODOIH9rlNniYWvCQ==}
@@ -3832,6 +3839,12 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
 
   '@floating-ui/utils@0.2.10': {}
+
+  '@google-cloud/documentai@9.5.0':
+    dependencies:
+      google-gax: 5.0.6
+    transitivePeerDependencies:
+      - supports-color
 
   '@google-cloud/promisify@5.0.0': {}
 

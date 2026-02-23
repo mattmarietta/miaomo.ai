@@ -67,35 +67,50 @@ export default function Chat() {
         }
     };
 
-    const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+    type OcrResult = {
+        fullText: string;
+        pages: Array<{
+            pageNumber: number;
+            words: Array<{ text: string; poly: Array<{ x: number; y: number }> }>;
+        }>;
+    };
+
+    const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+    const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrError, setOcrError] = useState<string | null>(null);
 
-    const handleFilesUpload = async (files: File[]) => {
+    const handleUpload = async ({
+        file,
+        downloadUrl,
+    }: {
+        file: File;
+        downloadUrl: string;
+    }) => {
+        setUploadedFileUrl(downloadUrl);
         setOcrError(null);
         setOcrLoading(true);
+        setOcrResult(null);
+
         try {
-            const form = new FormData();
-            files.forEach((f) => form.append("files", f));
+            const res = await fetch("/api/ocr/url", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: downloadUrl, mimeType: file.type }),
+            });
 
-            const res = await fetch("/api/vision", { method: "POST", body: form });
-
+            const data = await res.json();
             if (!res.ok) {
-            const text = await res.text().catch(()=>res.statusText);
-            setOcrError(`Server error: ${res.status} ${text?.slice?.(0,200) || ""}`);
-            setOcrLoading(false);
-            return;
+                throw new Error(data?.details || data?.error || `OCR failed (${res.status})`);
             }
 
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            setPreviewPdfUrl(url);
-            } catch (err: any) {
-                setOcrError(err?.message || "Upload failed");
-            } finally {
-                setOcrLoading(false);
-            }
-    };
+            setOcrResult(data as OcrResult);
+        } catch (err: any) {
+            setOcrError(err?.message || "OCR failed");
+        } finally {
+            setOcrLoading(false);
+        }
+};
 
     return (
         <div className="flex h-dvh w-full overflow-hidden bg-background">
@@ -104,14 +119,17 @@ export default function Chat() {
                 {/* Top Section / PDF Viewer Area */}
                 <main className="grow flex items-center justify-center overflow-auto p-4">
                     <div className="text-muted-foreground">
-                        PDF Preview Space
+                        {ocrLoading && "Running OCR..."}
+                        {!ocrLoading && ocrError && <span className="text-red-500">{ocrError}</span>}
+                        {!ocrLoading && !ocrError && !uploadedFileUrl && "Upload a PDF or image."}
+                        {!ocrLoading && !ocrError && uploadedFileUrl && "File uploaded. OCR complete."}
                     </div>
                 </main>
                 
                 {/* Bottom Section */}
                 <div className="h-24 shrink-0 border-t border-border/50 bg-background/50 flex items-center justify-center">
                         {/* Uploader */}
-                        <FileUploader onUpload={handleFilesUpload} />
+                        <FileUploader onUpload={handleUpload} />
                 </div>
             </div>
 
