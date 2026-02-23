@@ -93,7 +93,7 @@ export default function Chat() {
         setOcrResult(null);
 
         try {
-            const res = await fetch("/api/ocr/url", {
+            const res = await fetch("/api/chat/ocr/url", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: downloadUrl, mimeType: file.type }),

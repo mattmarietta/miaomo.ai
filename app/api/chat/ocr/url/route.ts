@@ -9,21 +9,48 @@ function getDocAiClient() {
     const location = process.env.DOC_AI_LOCATION!;
     const apiEndpoint = `${location}-documentai.googleapis.com`;
 
-    const creds = process.env.GOOGLE_CLOUD_CREDENTIALS_JSON
-        ? JSON.parse(process.env.GOOGLE_CLOUD_CREDENTIALS_JSON)
-        : undefined;
+    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
 
-    return new DocumentProcessorServiceClient(
-        creds ? { apiEndpoint, credentials: creds } : { apiEndpoint }
-    );
+    let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+    if (!clientEmail) throw new Error("Missing GOOGLE_CLIENT_EMAIL");
+    if (!privateKey) throw new Error("Missing GOOGLE_PRIVATE_KEY");
+
+    //remove wrapping quotes
+    privateKey = privateKey.replace(/^"|"$/g, "").replace(/^'|'$/g, "");
+
+    //convert literal \n into actual newlines
+    privateKey = privateKey.replace(/\\n/g, "\n");
+
+    return new DocumentProcessorServiceClient({ 
+        apiEndpoint, 
+        credentials: { 
+            client_email: clientEmail,
+            private_key: privateKey, 
+        },
+    });
 }
 
 function getVisionClient() {
-    const creds = process.env.GOOGLE_CLOUD_CREDENTIALS_JSON
-        ? JSON.parse(process.env.GOOGLE_CLOUD_CREDENTIALS_JSON)
-        : undefined;
+    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
 
-    return new vision.ImageAnnotatorClient(creds ? { credentials: creds } : {});
+    let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+    if (!clientEmail) throw new Error("Missing GOOGLE_CLIENT_EMAIL");
+    if (!privateKey) throw new Error("Missing GOOGLE_PRIVATE_KEY");
+
+    //remove wrapping quotes
+    privateKey = privateKey.replace(/^"|"$/g, "").replace(/^'|'$/g, "");
+
+    //convert literal \n into actual newlines
+    privateKey = privateKey.replace(/\\n/g, "\n");
+
+    return new vision.ImageAnnotatorClient({ 
+        credentials: {
+            client_email: clientEmail,
+            private_key: privateKey, 
+        },
+    });
 }
 
 export async function POST(req: Request) {
@@ -57,7 +84,7 @@ export async function POST(req: Request) {
 
         if (isPdf) {
             //is pdf, run document ai
-            const projectId = process.env.GCP_PROJECT_ID!;
+            const projectId = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_PROJECT_ID!;
             const location = process.env.DOC_AI_LOCATION!;
             const processorId = process.env.DOC_AI_PROCESSOR_ID!;
             const name = `projects/${projectId}/locations/${location}/processors/${processorId}`;
