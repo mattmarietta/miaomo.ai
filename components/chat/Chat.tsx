@@ -2,7 +2,8 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Plus, FileText, Globe, X, MessageSquare, Check, ChevronDown, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowUp, Plus, FileText, Globe, X, MessageSquare, Check, ChevronDown, Sparkles, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -11,7 +12,6 @@ import FileUploader from "@/components/FileUploader";
 import Markdown from "react-markdown";
 import { DefaultChatTransport } from "ai";
 import { useAuth } from "@/components/Auth";
-import { useRouter } from "next/navigation";
 import { ChatAgent } from "@/app/api/chat/ai";
 import { User } from "firebase/auth";
 
@@ -21,12 +21,17 @@ interface ChatTab {
     title: string;
 }
 
+interface Message {
+    id: string;
+    role: "user" | "assistant";
+    parts: { type: string; text?: string }[];
+}
+
 const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
 
 
 export function Chat({ user, initialMessages }: { user: User, initialMessages: ChatAgent[] }) {
-
-
+    const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
 
         transport: new DefaultChatTransport({
@@ -123,7 +128,7 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
     return (
         <div className="flex flex-1 min-h-0 bg-background">
             {/* PDF Viewer Area */}
-            <div className="grow min-w-0 flex items-center justify-center bg-muted/30">
+            <div className="grow min-w-0 flex items-center justify-center bg-muted/30 relative">
                 <div className="flex flex-col items-center gap-3">
                     <FileText size={32} className="text-muted-foreground/50" strokeWidth={1.5} />
                     <p className="text-xs text-muted-foreground">Drop a PDF here</p>
@@ -133,6 +138,15 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
                         {/* <FileUploader onUpload={handleFilesUpload} /> */}
                     </div>
                 </div>
+
+                {/* Quiz Builder Button  */}
+                <button
+                    onClick={() => router.push("/workspace/quiz-builder")}
+                    className="absolute bottom-6 left-6 px-4 py-2 bg-card border border-border rounded-xl text-sm font-medium hover:bg-muted transition-colors"
+                >
+                    <BookOpen size={18} className="text-muted-foreground" />
+                    Quiz Builder
+                </button>
             </div>
 
             {/* Chat Panel */}
@@ -177,18 +191,18 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
                                     </div>
                                 ) : (
                                     <div className="flex flex-col gap-6">
-                                        {messages.map((message) => (
+                                        {(messages as Message[]).map((message) => (
                                             <div key={message.id}>
                                                 <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                                                     {message.role === "user" ? "You" : "Assistant"}
                                                 </p>
                                                 <div className="text-[14px] leading-relaxed text-foreground prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:bg-muted prose-pre:rounded-lg prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
-                                                    {message.parts.map((part, i) => {
+                                                    {message.parts.map((part: { type: string; text?: string }, i: number) => {
                                                         switch (part.type) {
                                                             case "text":
                                                                 return (
                                                                     <Markdown key={`${message.id}-${i}`}>
-                                                                        {part.text}
+                                                                        {part.text || ""}
                                                                     </Markdown>
                                                                 );
                                                             default:
