@@ -80,6 +80,22 @@ export default function Chat() {
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrError, setOcrError] = useState<string | null>(null);
 
+    function guessMimeType(file: File): string {
+        if (file.type) return file.type;
+
+        const name = file.name.toLowerCase();
+
+        if (name.endsWith(".pdf")) return "application/pdf";
+        if (name.endsWith(".png")) return "image/png";
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+        if (name.endsWith(".tif") || name.endsWith(".tiff")) return "image/tiff";
+        if (name.endsWith(".webp")) return "image/webp";
+        if (name.endsWith(".bmp")) return "image/bmp";
+        if (name.endsWith(".gif")) return "image/gif";
+
+        return "";
+    }
+
     const handleUpload = async ({
         file,
         downloadUrl,
@@ -93,10 +109,15 @@ export default function Chat() {
         setOcrResult(null);
 
         try {
-            const res = await fetch("/api/chat/ocr/url", {
+            const mimeTypeToSend = guessMimeType(file);
+
+            const res = await fetch("/api/ocr/url", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: downloadUrl, mimeType: file.type }),
+                body: JSON.stringify({
+                    url: downloadUrl,
+                    mimeType: mimeTypeToSend,
+                }),
             });
 
             const data = await res.json();
@@ -122,7 +143,8 @@ export default function Chat() {
                         {ocrLoading && "Running OCR..."}
                         {!ocrLoading && ocrError && <span className="text-red-500">{ocrError}</span>}
                         {!ocrLoading && !ocrError && !uploadedFileUrl && "Upload a PDF or image."}
-                        {!ocrLoading && !ocrError && uploadedFileUrl && "File uploaded. OCR complete."}
+                        {!ocrLoading && !ocrError && uploadedFileUrl && !ocrResult && "File uploaded. Waiting on OCR..."}
+                        {!ocrLoading && !ocrError && ocrResult && "File uploaded. OCR complete."}
                     </div>
                 </main>
                 
