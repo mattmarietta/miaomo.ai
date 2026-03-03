@@ -9,25 +9,15 @@ function getDocAiClient() {
     const apiEndpoint = `${location}-documentai.googleapis.com`;
 
     const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-
     let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
     if (!clientEmail) throw new Error("Missing GOOGLE_CLIENT_EMAIL");
     if (!privateKey) throw new Error("Missing GOOGLE_PRIVATE_KEY");
 
-    //remove wrapping quotes
-    privateKey = privateKey.replace(/^"|"$/g, "").replace(/^'|'$/g, "");
-
     //convert literal \n into actual newlines
     privateKey = privateKey.replace(/\\n/g, "\n");
 
-    return new DocumentProcessorServiceClient({ 
-        apiEndpoint, 
-        credentials: { 
-            client_email: clientEmail,
-            private_key: privateKey, 
-        },
-    });
+    return new DocumentProcessorServiceClient({ apiEndpoint });
 }
 
 export async function POST(req: Request) {
@@ -67,7 +57,7 @@ export async function POST(req: Request) {
         }
         const bytes = Buffer.from(await resp.arrayBuffer());
 
-        const projectId = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_PROJECT_ID!;
+        const projectId = process.env.GOOGLE_PROJECT_ID!;
         const location = process.env.DOC_AI_LOCATION!;
         const processorId = process.env.DOC_AI_PROCESSOR_ID!;
         const name = `projects/${projectId}/locations/${location}/processors/${processorId}`;
@@ -103,6 +93,7 @@ export async function POST(req: Request) {
                 }) ?? [],
             })) ?? [];
 
+        console.log("OCR result:", { fullText, pages });
         return NextResponse.json({ fullText, pages });
     }catch (e: any) {
         console.error(e);
