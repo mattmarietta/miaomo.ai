@@ -8,15 +8,6 @@ function getDocAiClient() {
     const location = process.env.DOC_AI_LOCATION!;
     const apiEndpoint = `${location}-documentai.googleapis.com`;
 
-    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-    let privateKey = process.env.GOOGLE_PRIVATE_KEY;
-
-    if (!clientEmail) throw new Error("Missing GOOGLE_CLIENT_EMAIL");
-    if (!privateKey) throw new Error("Missing GOOGLE_PRIVATE_KEY");
-
-    //convert literal \n into actual newlines
-    privateKey = privateKey.replace(/\\n/g, "\n");
-
     return new DocumentProcessorServiceClient({ apiEndpoint });
 }
 
