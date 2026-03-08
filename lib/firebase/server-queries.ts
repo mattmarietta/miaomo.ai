@@ -1,28 +1,28 @@
 "use server"
 import { serverDB } from "@/lib/firebase/firebaseServer";
-import { collection, addDoc, getDocs, Timestamp } from "firebase/firestore";
-import { chatSchema, DBChatSchema, DBMessageSchema } from "@/lib/firebase/schema";
-import { CarTaxiFrontIcon } from "lucide-react";
-import { NextResponse } from "next/server";
+import { DBChatSchema, DBMessageSchema } from "@/lib/firebase/schema";
 
-const chatsCollection = serverDB.collection("chats")
 const messagesCollection = serverDB.collection("messages")
 
-export async function saveChat({ id, userId, title }: Pick<DBChatSchema, "id" | "userId" | "title">) {
+function getChatsCollection(workspaceId: string) {
+  return serverDB.collection("workspaces").doc(workspaceId).collection("chats")
+}
+
+export async function saveChat({ id, userId, title, workspaceId }: Pick<DBChatSchema, "id" | "userId" | "title"> & { workspaceId: string }) {
   try {
-    return await chatsCollection.doc(id).set({
+    return await getChatsCollection(workspaceId).doc(id).set({
       id,
       userId,
+      ownerUid: userId,
       createdAt: new Date(),
       updatedAt: null,
-      title
+      title,
+      workspaceId,
     })
   } catch (err) {
     console.error('Error saving chat:', err);
     return { success: false, error: 'Failed to save chat' };
   }
-
-
 }
 export async function saveMessage({ chatId, parts, role, userId, metadata, attachments }: DBMessageSchema) {
   try {
@@ -43,9 +43,9 @@ export async function saveMessage({ chatId, parts, role, userId, metadata, attac
 
 
 }
-export async function getChatById({ id }: { id: string }) {
+export async function getChatById({ id, workspaceId }: { id: string, workspaceId: string }) {
   try {
-    const chatDoc = await chatsCollection.doc(id).get()
+    const chatDoc = await getChatsCollection(workspaceId).doc(id).get()
     if (!chatDoc.exists) return { success: false, error: "Chat not found" }
     return {
       success: true, data: {
@@ -59,9 +59,9 @@ export async function getChatById({ id }: { id: string }) {
   }
 
 }
-export async function updateChatTitleById({ id, title }: { id: string, title: string }) {
+export async function updateChatTitleById({ id, title, workspaceId }: { id: string, title: string, workspaceId: string }) {
   try {
-    const chatRef = await chatsCollection.doc(id)
+    const chatRef = getChatsCollection(workspaceId).doc(id)
     await chatRef.update({ title, updatedAt: new Date() })
     return { sucess: true }
 
@@ -71,9 +71,9 @@ export async function updateChatTitleById({ id, title }: { id: string, title: st
   }
 
 }
-export async function updateChatTimestampById({ id }: { id: string }) {
+export async function updateChatTimestampById({ id, workspaceId }: { id: string, workspaceId: string }) {
   try {
-    const chatRef = await chatsCollection.doc(id)
+    const chatRef = getChatsCollection(workspaceId).doc(id)
     await chatRef.update({ updatedAt: new Date() })
     return { sucess: true }
 
@@ -84,16 +84,36 @@ export async function updateChatTimestampById({ id }: { id: string }) {
 
 }
 
-export async function deleteChatById({ id }: DBChatSchema) {
+const workspacesCollection = serverDB.collection("workspaces")
+
+export async function updateWorkspaceTitleById({ id, title }: { id: string, title: string }) {
+  try {
+    const ref = workspacesCollection.doc(id)
+    await ref.update({ title, updatedAt: new Date() })
+    return { success: true }
+  } catch (err) {
+    console.error('Error updating workspace title:', err);
+    return { success: false, error: 'Failed to update workspace title' };
+  }
+}
+
+export async function getWorkspaceById({ id }: { id: string }) {
+  try {
+    const doc = await workspacesCollection.doc(id).get()
+    if (!doc.exists) return { success: false, error: "Workspace not found" }
+    return { success: true, data: { id: doc.id, ...doc.data() } }
+  } catch (err) {
+    console.error('Error getting workspace:', err);
+    return { success: false, error: 'Failed to fetch workspace' };
+  }
+}
+
+export async function deleteChatById({ id, workspaceId }: { id: string, workspaceId: string }) {
   try {
     const batch = serverDB.batch()
-    const chatRef = await chatsCollection.doc(id)
-    if (!chatRef) {
-      throw new Error("The chat does not exist")
-    }
-    const messagesSnapshot = await messagesCollection.where("id", '==', chatRef.id).get()
+    const chatRef = getChatsCollection(workspaceId).doc(id)
+    const messagesSnapshot = await messagesCollection.where("chatId", '==', id).get()
 
-    // adding all the messages and chat to be deleted together in a single batch
     messagesSnapshot.docs.forEach(msg => batch.delete(msg.ref))
     batch.delete(chatRef)
 
@@ -101,8 +121,6 @@ export async function deleteChatById({ id }: DBChatSchema) {
   } catch (err: any) {
     throw new Error("There was an error deleting chat and messages into the DB", err)
   }
-
-
 }
 
 

@@ -48,3 +48,34 @@ export const dbMessageSchema = z.object({
 
 export type DBMessageSchema = z.infer<typeof dbMessageSchema>;
 
+export const workspaceSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  ownerUid: z.string(),
+  createdAt: z.any(),
+  updatedAt: z.any(),
+});
+
+export type DBWorkspaceSchema = z.infer<typeof workspaceSchema>;
+
+export const workspaceFileSchema = z.object({
+  id: z.string(),
+  originalName: z.string(),
+  mimeType: z.string(),
+  size: z.number(),
+  status: z.string(),
+  storagePath: z.string(),
+  downloadUrl: z.string().optional(),
+  ownerUid: z.string(),
+  workspaceID: z.string(),
+  fileId: z.string().optional(),
+  generation: z.string().optional(),
+  chunkCount: z.number().optional(),
+  vectorCount: z.number().optional(),
+  errorMessage: z.string().optional(),
+  createdAt: z.any(),
+  updatedAt: z.any(),
+});
+
+export type DBWorkspaceFileSchema = z.infer<typeof workspaceFileSchema>;
+

@@ -3,7 +3,7 @@ import { object, string, z } from "zod"
 import { messageSchema, userMessageSchema } from "@/lib/firebase/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { serverAuth } from "@/lib/firebase/firebaseServer";
-import { getChatById, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById } from "@/lib/firebase/server-queries";
+import { getChatById, getWorkspaceById, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById, updateWorkspaceTitleById } from "@/lib/firebase/server-queries";
 import { aiAgent, generateTitleFromUserMessage } from "@/app/api/chat/ai";
 import { createVertex } from "@ai-sdk/google-vertex/edge";
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -22,8 +22,7 @@ export const postRequestBodySchema = z.object({
     // Either a single new message or all messages (for tool approvals)
     message: userMessageSchema.optional(),
     messages: z.array(messageSchema).optional(),
-    // selectedChatModel: z.string(),
-    // selectedVisibilityType: z.enum(["public", "private"]),
+    workspaceId: z.string(),
 });
 
 type PostRequestBody = z.infer<typeof postRequestBodySchema>;
@@ -48,23 +47,35 @@ export async function POST(req: Request) {
         throw new Error("There was an error parsing the post body request")
     }
 
-    const { id, messages } = requestBody
+    const { id, messages, workspaceId } = requestBody
+    console.log("Chat request - id:", id, "workspaceId:", workspaceId)
     const uiMessages = messages as UIMessage[]
     const message = uiMessages.at(-1);
 
 
 
     try {
-        const chat = await getChatById({ id })
+        const chat = await getChatById({ id, workspaceId })
         let titlePromise: Promise<string | null>;
         // if we did not find a chat, let's create it
         if (!chat.success) {
             if (message?.role == "user") {
                 console.log("Creating new chat!!")
-                await saveChat({ id, userId: auth.userId, title: "New Chat" })
+                await saveChat({ id, userId: auth.userId, title: "New Chat", workspaceId })
 
                 titlePromise = generateTitleFromUserMessage({ message })
 
+                // Auto-title the workspace if it's still "Untitled Workspace"
+                if (workspaceId) {
+                    const ws = await getWorkspaceById({ id: workspaceId })
+                    if (ws.success && (ws.data as any)?.title === "Untitled Workspace") {
+                        titlePromise.then(async (title) => {
+                            if (title) {
+                                await updateWorkspaceTitleById({ id: workspaceId, title })
+                            }
+                        }).catch(console.error)
+                    }
+                }
             }
         }
         console.log("did we make it here")
@@ -93,7 +104,7 @@ export async function POST(req: Request) {
 
                 if (titlePromise) {
                     const title = await titlePromise
-                    if (title) await updateChatTitleById({ id, title })
+                    if (title) await updateChatTitleById({ id, title, workspaceId })
                     console.log("Title", title)
 
                     writer.write({ type: "data-title", data: { title }, transient: true })
