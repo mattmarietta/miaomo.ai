@@ -234,7 +234,7 @@ const styles = {
     },
     title: {
         marginBottom: '1.5rem',
-        textAlign: 'center' as 'center',
+        textAlign: 'center' as const,
         color: '#333'
     },
     section: {
@@ -267,7 +267,7 @@ const styles = {
         height: '20px',
         backgroundColor: '#e0e0e0',
         borderRadius: '10px',
-        overflow: 'hidden' as 'hidden'
+        overflow: 'hidden' as const
     },
     progressBarFill: {
         height: '100%',
@@ -275,7 +275,7 @@ const styles = {
         transition: 'width 0.3s ease'
     },
     progressText: {
-        textAlign: 'center' as 'center',
+        textAlign: 'center' as const,
         marginTop: '0.5rem',
         color: '#333'
     },
