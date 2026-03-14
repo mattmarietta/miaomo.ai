@@ -5,8 +5,10 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/firebase";
 import { Button } from "@/components/ui/button";
 import { CirclePlus, Loader2 } from "lucide-react";
+import {useParams} from "next/navigation";
 
 type FileUploaderProps = {
+    workspaceId?: string;
     onUpload?: (payload: { file: File; downloadUrl: string }) => void;
 };
 
@@ -14,6 +16,8 @@ export default function FileUploader({ onUpload }: FileUploaderProps) {
     const [progress, setProgress] = useState<number>(0);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const params = useParams();
+    const workspaceId = params.workspaceId as string;
 
     const handleButtonClick = () => fileInputRef.current?.click();
 
@@ -34,8 +38,13 @@ export default function FileUploader({ onUpload }: FileUploaderProps) {
             setUploading(false);
             return;
         }
-        const storageRef = ref(storage, `users/${user.uid}/uploads/${Date.now()}-${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+
+        const fileId = crypto.randomUUID(); 
+        const storagePath = `workspaces/${workspaceId}/files/${fileId}/original.pdf`;
+        const storageRef = ref(storage, storagePath);
+        const uploadTask = uploadBytesResumable(storageRef, file, {
+        contentType: file.type,
+        });
 
         uploadTask.on("state_changed",
             (snapshot) => {
