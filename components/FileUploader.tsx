@@ -3,12 +3,19 @@
 import React, { useState, useRef } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/firebase";
+import { addWorkspaceFile } from "@/lib/firebase/client-queries";
 import { Button } from "@/components/ui/button";
-import { CircleDivide, CirclePlus, Loader2 } from "lucide-react";
+import { CirclePlus, Loader2, FileText, X } from "lucide-react";
 
-export default function FileUploader() {
+interface FileUploaderProps {
+    workspaceId?: string;
+    onUploadComplete?: (url: string, fileName: string) => void;
+}
+
+export default function FileUploader({ workspaceId, onUploadComplete }: FileUploaderProps) {
     const [progress, setProgress] = useState<number>(0);
     const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleButtonClick = () => fileInputRef.current?.click();
@@ -18,15 +25,18 @@ export default function FileUploader() {
         if (!file) return;
 
         setUploading(true);
-    
+        setError(null);
+
         const user = auth.currentUser;
 
         if (!user) {
-            console.error("No user authenticated!");
+            setError("Not authenticated");
             setUploading(false);
             return;
         }
-        const storageRef = ref(storage, `users/${user.uid}/uploads/${Date.now()}-${file.name}`);
+
+        const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
+        const storageRef = ref(storage, storagePath);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         uploadTask.on("state_changed",
@@ -34,42 +44,63 @@ export default function FileUploader() {
                 const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                 setProgress(Math.round(prog));
             },
-            (error) => {
-                console.error("Upload error:", error);
+            (err) => {
+                console.error("Upload error:", err);
+                setError("Upload failed. Please try again.");
                 setUploading(false);
             },
             async () => {
-                const url = await getDownloadURL(uploadTask.snapshot.ref);
-                console.log("File available at: ", url);
-                setUploading(false);
-                setProgress(0);
+                try {
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+
+                    // Save file metadata to workspace's files subcollection
+                    if (workspaceId) {
+                        await addWorkspaceFile(workspaceId, {
+                            originalName: file.name,
+                            mimeType: file.type || "application/octet-stream",
+                            size: file.size,
+                            storagePath,
+                            downloadUrl: url,
+                            ownerUid: user.uid,
+                        });
+                    }
+
+                    onUploadComplete?.(url, file.name);
+                } catch (err) {
+                    console.error("Error saving file metadata:", err);
+                    setError("File uploaded but failed to save metadata.");
+                } finally {
+                    setUploading(false);
+                    setProgress(0);
+                    // Reset file input so same file can be re-selected
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                }
             }
         );
     };
 
     return (
-        <div className="flex flex-col items-center">
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleUpload} 
-                accept=".pdf" // Restrict to PDFs for your viewer
-                className="hidden" 
+        <div className="flex flex-col items-center gap-1">
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleUpload}
+                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                className="hidden"
             />
-            <Button 
+            <Button
                 type="button"
                 variant="ghost"
                 disabled={uploading}
                 onClick={handleButtonClick}
                 className="group h-auto p-0 flex flex-col items-center gap-2 hover:bg-transparent active:scale-95 transition-all"
             >
-                {/* Square Icon Container */}
                 <div className="relative flex items-center justify-center gap-3 w-40 h-16 rounded-2xl bg-background border border-border shadow-sm group-hover:shadow-md transition-all px-4">
                     {uploading ? (
                         <div className="flex items-center gap-3">
                             <div className="relative flex items-center justify-center">
                                 <Loader2 className="w-6 h-6 text-primary animate-spin" strokeWidth={2} />
-                                <span className="absolute-text-[10px] font-bold text-primary">
+                                <span className="absolute text-[10px] font-bold text-primary">
                                     {progress}%
                                 </span>
                             </div>
@@ -78,7 +109,6 @@ export default function FileUploader() {
                             </span>
                         </div>
                     ) : (
-                        /* Default State */
                         <>
                             <CirclePlus
                                 size={24}
@@ -92,6 +122,9 @@ export default function FileUploader() {
                     )}
                 </div>
             </Button>
+            {error && (
+                <p className="text-xs text-destructive mt-1">{error}</p>
+            )}
         </div>
     );
 }

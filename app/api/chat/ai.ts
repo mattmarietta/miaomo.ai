@@ -22,7 +22,7 @@ export const google = createGoogleGenerativeAI({
 export const aiAgent = new ToolLoopAgent({
   model: google("gemini-flash-latest"),
   // toolChoice: "auto",
-  instructions: "You are a helpful assistant for answering questions related to user uploaded documents",
+  instructions: `You are a helpful assistant. Users may reference files by name, but you do NOT have access to the content of any uploaded files. If a user asks about a specific file's content, clearly state that you cannot read the file yet and suggest they paste the relevant text. Never make up or guess file contents.`,
   // maxOutputTokens: 10000,
   // callOptionsSchema: z.object({
   // instruction: z.string(),
