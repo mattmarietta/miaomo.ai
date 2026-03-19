@@ -1,8 +1,7 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-
-import { getFirestore, collection } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, collection, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 const clientCredentials = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,6 +17,13 @@ const app = initializeApp(clientCredentials);
 export const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// Connect to local emulators when running in development
+if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true") {
+    connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "localhost", 8080);
+    connectStorageEmulator(storage, "localhost", 9199);
+}
 
 const postsCollection = collection(db, "posts");
 const commentsCollection = collection(db, "comments");
