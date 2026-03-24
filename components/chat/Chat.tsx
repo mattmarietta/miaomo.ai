@@ -139,13 +139,13 @@ export function Chat({ user, initialMessages }: { user: User, initialMessages: C
                     </div>
                 </div>
 
-                {/* Quiz Builder Button  */}
+                {/* Study Tools Button  */}
                 <button
                     onClick={() => router.push("/workspace/quiz-builder")}
                     className="absolute bottom-6 left-6 px-4 py-2 bg-card border border-border rounded-xl text-sm font-medium hover:bg-muted transition-colors"
                 >
                     <BookOpen size={18} className="text-muted-foreground" />
-                    Quiz Builder
+                    Study Tools
                 </button>
             </div>
 
