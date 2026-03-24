@@ -1,4 +1,4 @@
-import {onObjectFinalized} from "firebase-functions/v2/storage";
+import {onObjectFinalized, onObjectDeleted} from "firebase-functions/v2/storage";
 import {initializeApp} from "firebase-admin/app";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
@@ -187,6 +187,49 @@ export const onUploadFinalized = onObjectFinalized(
         console.error("[INGEST] failed to write error status to Firestore", {message: fsErr?.message});
       }
       throw err;
+    }
+  }
+);
+
+export const onFileDeleted = onObjectDeleted(
+  {
+    region: "us-west1",
+    bucket: "miaomo-64d4f.firebasestorage.app",
+    secrets: ["PINECONE_API_KEY", "PINECONE_INDEX_NAME"],
+  },
+  async (event) => {
+    const obj = event.data;
+    if (!obj?.name) return;
+
+    const parsed = parsePath(obj.name);
+    if (!parsed) return;
+
+    const {workspaceId, fileId} = parsed;
+    console.log("[DELETE] starting cleanup", {workspaceId, fileId});
+
+    const ref = db.doc(`workspaces/${workspaceId}/files/${fileId}`);
+
+    try {
+      // Read chunkCount from Firestore so we can reconstruct exact vector IDs.
+      // Vector IDs are stored as "{fileId}:{chunkIndex}" — see upsertChunks in pinecone.ts.
+      const snap = await ref.get();
+      const chunkCount: number = snap.data()?.chunkCount ?? 0;
+
+      if (chunkCount > 0) {
+        const {getWorkspaceIndex} = await import("./pinecone.js");
+        const index = await getWorkspaceIndex(workspaceId);
+        const ids = Array.from({length: chunkCount}, (_, i) => `${fileId}:${i}`);
+        await index.deleteMany(ids);
+        console.log("[DELETE] removed vectors from Pinecone", {fileId, chunkCount});
+      } else {
+        console.log("[DELETE] no vectors to remove (chunkCount=0 or file never ingested)");
+      }
+
+      await ref.delete();
+      console.log("[DELETE] removed Firestore document", {workspaceId, fileId});
+    } catch (err: any) {
+      console.error("[DELETE] error during cleanup", {workspaceId, fileId, message: err?.message});
+      // Don't rethrow — a failed cleanup shouldn't block the Storage deletion
     }
   }
 );
