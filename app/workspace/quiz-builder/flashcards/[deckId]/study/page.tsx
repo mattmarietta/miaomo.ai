@@ -133,7 +133,6 @@ export default function StudyPage() {
   if (completed) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-        <div className="text-6xl mb-4">🎉</div>
         <h1 className="text-2xl font-semibold mb-2">All caught up!</h1>
         <p className="text-muted-foreground mb-8">You mastered all {deck.cards.length} cards!</p>
         
