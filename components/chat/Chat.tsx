@@ -2,7 +2,8 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { ArrowUp, Check, ChevronDown, Paperclip, Loader2, FileText, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowUp, Check, ChevronDown, Paperclip, Loader2, FileText, X, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -32,6 +33,7 @@ interface ChatProps {
 }
 
 export function Chat({ user, initialMessages, workspaceId, files = [], onFileClick }: ChatProps) {
+    const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         transport: new DefaultChatTransport({
             api: "/api/chat",
@@ -417,6 +419,15 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
                 </div>
 
                 {renderInputBar()}
+
+                { /*Study Tools button*/ }
+                <button
+                    onClick={() => router.push("/workspace/quiz-builder")}
+                    className="absolute bottom-6 left-6 px-4 py-2 border rounded-xl text-sm hover:bg-muted"
+                >
+                    <BookOpen size={16} />
+                    Study Tools
+                </button>
             </div>
         );
     }
