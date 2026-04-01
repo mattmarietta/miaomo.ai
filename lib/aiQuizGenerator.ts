@@ -116,10 +116,15 @@ Return ONLY the JSON array, no markdown, no explanation.`;
     }
   }
 
-  const aiQuestions: AIQuestion[] = JSON.parse(jsonStr);
-
-  if (!Array.isArray(aiQuestions)) {
-    throw new Error("Invalid response format");
+  let aiQuestions: AIQuestion[];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Invalid response format");
+    }
+    aiQuestions = parsed;
+  } catch {
+    throw new Error("Failed to parse AI response. Please try again.");
   }
 
   // Convert AI response to our Question format

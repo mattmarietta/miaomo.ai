@@ -51,6 +51,15 @@ Return ONLY a JSON array like this, no other text:
     if (arrayMatch) jsonStr = arrayMatch[0];
   }
 
-  const cards: AICard[] = JSON.parse(jsonStr);
+  let cards: AICard[];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Invalid response format");
+    }
+    cards = parsed;
+  } catch {
+    throw new Error("Failed to parse AI response. Please try again.");
+  }
   return cards;
 }

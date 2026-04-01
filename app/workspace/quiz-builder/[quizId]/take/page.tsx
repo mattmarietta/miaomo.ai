@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import {
@@ -11,6 +11,15 @@ import {
   saveQuizAttempt,
 } from "@/lib/firebase/quizStore";
 import { ArrowLeft, Check, X, RotateCcw, Trophy, Target } from "lucide-react";
+
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 type PageProps = {
   params: Promise<{ quizId: string }>;
@@ -135,6 +144,21 @@ export default function TakeQuizPage({ params }: PageProps) {
     });
     setMatchingAnswers(ma);
   }
+
+  // Shuffle definitions once per quiz load
+  const shuffledMatchingDefs = useMemo(() => {
+    if (!quiz) return {};
+    const map: Record<string, string[]> = {};
+    quiz.questions
+      .filter(q => q.type === "matching")
+      .forEach(q => {
+        if (q.matchingPairs) {
+          map[q.id] = fisherYatesShuffle(q.matchingPairs.map(p => p.definition));
+        }
+      });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quiz?.id]);
 
   if (authLoading || loading) {
     return (
@@ -487,9 +511,7 @@ export default function TakeQuizPage({ params }: PageProps) {
               {matchingQuestions.map((q, idx) => {
                 if (!q.matchingPairs) return null;
                 
-                const shuffledDefs = [...q.matchingPairs]
-                  .map(p => p.definition)
-                  .sort(() => 0.5 - Math.random());
+                const shuffledDefs = shuffledMatchingDefs[q.id] || [];
 
                 return (
                   <div key={q.id} className="bg-card border border-border rounded-xl p-5">
