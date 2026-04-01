@@ -11,7 +11,7 @@ import Link from "next/link"
 export const AppSidebarHeader = ({ pathname }: { pathname: string }) => {
   return (
     <SidebarHeader className="">
-      <div className="flex gap-1 items-center px-1">
+      <div className="flex gap-1 items-center  px-1">
         <CatIcon className="size-5" /><h1 className="text-lg  font-cal-sans text-zinc-900  ">Miaomo</h1>
       </div>
       <SidebarMenu>
