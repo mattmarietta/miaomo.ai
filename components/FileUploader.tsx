@@ -22,6 +22,10 @@ export default function FileUploader({ workspaceId, onUploadComplete }: FileUplo
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+
+        //allow re-uploading same file later
+        e.currentTarget.value = "";
+
         if (!file) return;
 
         setUploading(true);
