@@ -124,6 +124,7 @@ export default function WorkspaceChatPage() {
           key={chatId}
           user={user}
           initialMessages={chatMessages}
+          chatId={chatId}
           workspaceId={id}
           files={files}
           externalMessage={externalMessage}
