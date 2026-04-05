@@ -30,9 +30,12 @@ interface ChatProps {
     workspaceId?: string;
     files?: DBWorkspaceFileSchema[];
     onFileClick?: (file: DBWorkspaceFileSchema) => void;
+    externalMessage?: string;
+    onExternalMessageSent?: () => void;
+    hideExternalMessage?: boolean;
 }
 
-export function Chat({ user, initialMessages, workspaceId, files = [], onFileClick }: ChatProps) {
+export function Chat({ user, initialMessages, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
     const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         transport: new DefaultChatTransport({
@@ -48,6 +51,7 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
     const [uploadProgress, setUploadProgress] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [lastMessageWasExternal, setLastMessageWasExternal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // @-mention state
@@ -83,6 +87,25 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
     useEffect(() => {
         setMentionIndex(0);
     }, [filteredFiles.length]);
+
+    // Handle external message
+    useEffect(() => {
+        if (externalMessage) {
+            user.getIdToken().then(idToken => {
+                sendMessage({ text: externalMessage }, {
+                    headers: {
+                        "Authorization": `Bearer ${idToken}`
+                    },
+                    body: {
+                        attachedFiles: [],
+                        model: selectedModel,
+                    },
+                });
+                setLastMessageWasExternal(true);
+                onExternalMessageSent?.();
+            });
+        }
+    }, [externalMessage, sendMessage, selectedModel, onExternalMessageSent, user]);
 
     const insertMention = useCallback((file: DBWorkspaceFileSchema) => {
         if (mentionStartPos === null) return;
@@ -185,6 +208,7 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
             });
             setInput("");
             setAttachedFiles([]);
+            setLastMessageWasExternal(false); // Reset flag when user sends manual message
         }
     };
 
@@ -438,27 +462,34 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
             <div className="flex-1 overflow-y-auto">
                 <div className="max-w-3xl mx-auto px-5 py-5">
                     <div className="flex flex-col gap-6">
-                        {(messages as Message[]).map((message) => (
-                            <div key={message.id}>
-                                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                                    {message.role === "user" ? "You" : "Assistant"}
-                                </p>
-                                <div className="text-[14px] leading-relaxed text-foreground prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:bg-muted prose-pre:rounded-lg prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
-                                    {message.parts.map((part: { type: string; text?: string }, i: number) => {
-                                        switch (part.type) {
-                                            case "text":
-                                                return (
-                                                    <Markdown key={`${message.id}-${i}`}>
-                                                        {part.text || ""}
-                                                    </Markdown>
-                                                );
-                                            default:
-                                                return null;
-                                        }
-                                    })}
+                        {(messages as Message[]).map((message, index) => {
+                            // Hide the first external message if hideExternalMessage is true
+                            if (hideExternalMessage && lastMessageWasExternal && index === 0 && message.role === "user") {
+                                return null;
+                            }
+                            
+                            return (
+                                <div key={message.id}>
+                                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                                        {message.role === "user" ? "You" : "Assistant"}
+                                    </p>
+                                    <div className="text-[14px] leading-relaxed text-foreground prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:bg-muted prose-pre:rounded-lg prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
+                                        {message.parts.map((part: { type: string; text?: string }, i: number) => {
+                                            switch (part.type) {
+                                                case "text":
+                                                    return (
+                                                        <Markdown key={`${message.id}-${i}`}>
+                                                            {part.text || ""}
+                                                        </Markdown>
+                                                    );
+                                                default:
+                                                    return null;
+                                            }
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {status === "streaming" && messages[messages.length - 1]?.role === "user" && (
                             <div>

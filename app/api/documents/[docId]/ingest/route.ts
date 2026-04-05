@@ -51,10 +51,10 @@ function chunkText(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { docId: string } }
+  { params }: { params: Promise<{ docId: string }> }
 ) {
   try {
-    const { docId } = params;
+    const { docId } = await params;
 
     // Parse request body
     let body: RequestBody;

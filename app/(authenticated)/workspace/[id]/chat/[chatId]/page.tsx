@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-export default function WorkspacePage() {
-  const { id } = useParams<{ id: string }>();
+export default function WorkspaceChatPage() {
+  const { id, chatId } = useParams<{ id: string; chatId: string }>();
   const searchParams = useSearchParams();
   const selectedFileId = searchParams.get("file");
   const { user, loading } = useAuth();
@@ -29,6 +29,7 @@ export default function WorkspacePage() {
   const [previousFiles, setPreviousFiles] = useState<DBWorkspaceFileSchema[]>([]);
   const [summaryDialogFile, setSummaryDialogFile] = useState<DBWorkspaceFileSchema | null>(null);
   const [externalMessage, setExternalMessage] = useState<string>("");
+  const [chatMessages, setChatMessages] = useState<ChatAgent[]>([]);
 
   useEffect(() => {
     if (loading) return;
@@ -49,12 +50,42 @@ export default function WorkspacePage() {
           setSummaryDialogFile(newFile);
         }
       });
-      
+
       setFiles(newFiles);
       setPreviousFiles(newFiles);
     });
     return () => unsub();
   }, [id, user, previousFiles]);
+
+  // Load chat messages when chatId changes
+  useEffect(() => {
+    if (!chatId || !user) return;
+
+    const loadChatMessages = async () => {
+      try {
+        const response = await fetch(`/api/chat/messages/${chatId}`, {
+          headers: {
+            "Authorization": `Bearer ${await user.getIdToken()}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Convert DB messages to ChatAgent format
+          const messages: ChatAgent[] = data.messages.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            parts: msg.parts,
+          }));
+          setChatMessages(messages);
+        }
+      } catch (error) {
+        console.error("Failed to load chat messages:", error);
+      }
+    };
+
+    loadChatMessages();
+  }, [chatId, user]);
 
   const selectedFile = useMemo(() => {
     if (!selectedFileId) return null;
@@ -65,8 +96,8 @@ export default function WorkspacePage() {
 
   const handleGenerateSummary = () => {
     if (!summaryDialogFile || !summaryDialogFile.fullText) return;
-    
-    const summaryMessage = `Please provide a summary of the following document:\n\n${summaryDialogFile.fullText}\n\nPlease summarize the key points from this document.`;
+
+    const summaryMessage = `Please provide a summary of the following document text that was extracted from the document:\n\n${summaryDialogFile.fullText}\n\nPlease summarize the key points from this document.`;
     setExternalMessage(summaryMessage);
     setSummaryDialogFile(null);
   };
@@ -90,16 +121,16 @@ export default function WorkspacePage() {
       {/* Chat — center */}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         <Chat
-          key={id}
+          key={chatId}
           user={user}
-          initialMessages={[]}
+          initialMessages={chatMessages}
           workspaceId={id}
           files={files}
           externalMessage={externalMessage}
           onExternalMessageSent={handleExternalMessageSent}
           hideExternalMessage={true}
           onFileClick={(file) => {
-            router.push(`/workspace/${id}?file=${encodeURIComponent(file.id)}`)
+            router.push(`/workspace/${id}/chat/${chatId}?file=${encodeURIComponent(file.id)}`)
           }}
         />
       </div>
@@ -116,7 +147,7 @@ export default function WorkspacePage() {
               </span>
             </div>
             <Link
-              href={`/workspace/${id}`}
+              href={`/workspace/${id}/chat/${chatId}`}
               className="p-1 rounded-md hover:bg-muted transition-colors"
             >
               <X className="size-4 text-muted-foreground" />
@@ -145,14 +176,14 @@ export default function WorkspacePage() {
           </div>
         </div>
       )}
-      
+
       {/* Summary Dialog */}
       <Dialog open={!!summaryDialogFile} onOpenChange={() => setSummaryDialogFile(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Text Processing Complete</DialogTitle>
             <DialogDescription>
-              Text processing has finished for "{summaryDialogFile?.originalName}". 
+              Text processing has finished for "{summaryDialogFile?.originalName}".
               Would you like to generate an initial summary of this document?
             </DialogDescription>
           </DialogHeader>
