@@ -21,11 +21,11 @@ import {
   Paperclip,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, generateWorkspaceFileId } from "@/lib/firebase/client-queries";
 
 export const AppSidebarWorkspaceView = ({
   workspaceId,
@@ -36,6 +36,7 @@ export const AppSidebarWorkspaceView = ({
   const [chats, setChats] = useState<DBChatSchema[]>([]);
   const { user } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -54,7 +55,8 @@ export const AppSidebarWorkspaceView = ({
     if (!file || !user) return;
 
     setUploading(true);
-    const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
+    const fileId = generateWorkspaceFileId(workspaceId);
+    const storagePath = `workspaces/${workspaceId}/files/${fileId}/${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -75,7 +77,7 @@ export const AppSidebarWorkspaceView = ({
             storagePath,
             downloadUrl: url,
             ownerUid: user.uid,
-          });
+          }, fileId);
         } catch (err) {
           console.error(err);
         } finally {
@@ -172,15 +174,15 @@ export const AppSidebarWorkspaceView = ({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                asChild
                 className="gap-2"
                 size="sm"
-                isActive={pathname === `/workspace/${workspaceId}`}
+                onClick={() => {
+                  const newChatId = crypto.randomUUID();
+                  router.push(`/workspace/${workspaceId}/chat/${newChatId}`);
+                }}
               >
-                <Link href={`/workspace/${workspaceId}`}>
-                  <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-sm font-medium">New Chat</span>
-                </Link>
+                <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm font-medium">New Chat</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             {chats.map((chat) => (
