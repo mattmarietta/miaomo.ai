@@ -2,6 +2,12 @@
 import { serverDB } from "@/lib/firebase/firebaseServer";
 import { DBChatSchema, DBMessageSchema } from "@/lib/firebase/schema";
 
+const messagesCollection = serverDB.collection("messages");
+
+function getChatsCollection(workspaceId: string) {
+  return serverDB.collection("workspaces").doc(workspaceId).collection("chats");
+}
+
 export async function saveMessage({ chatId, userId, role, parts, metadata, attachments }: DBMessageSchema) {
   try {
     const messageRef = messagesCollection.doc()
