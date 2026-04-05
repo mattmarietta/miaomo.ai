@@ -29,7 +29,7 @@ export default function WorkspaceChatPage() {
   const [previousFiles, setPreviousFiles] = useState<DBWorkspaceFileSchema[]>([]);
   const [summaryDialogFile, setSummaryDialogFile] = useState<DBWorkspaceFileSchema | null>(null);
   const [externalMessage, setExternalMessage] = useState<string>("");
-  const [chatMessages, setChatMessages] = useState<ChatAgent[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatAgent[] | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -81,6 +81,7 @@ export default function WorkspaceChatPage() {
         }
       } catch (error) {
         console.error("Failed to load chat messages:", error);
+        setChatMessages([]);
       }
     };
 
@@ -106,7 +107,7 @@ export default function WorkspaceChatPage() {
     setExternalMessage("");
   };
 
-  if (loading) {
+  if (loading || chatMessages === null) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
         <p className="text-muted-foreground">Loading...</p>
@@ -123,7 +124,7 @@ export default function WorkspaceChatPage() {
         <Chat
           key={chatId}
           user={user}
-          initialMessages={chatMessages}
+          initialMessages={chatMessages ?? []}
           chatId={chatId}
           workspaceId={id}
           files={files}
