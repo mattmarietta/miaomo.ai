@@ -46,14 +46,18 @@ export async function saveChat({ id, userId, title, workspaceId }: Pick<DBChatSc
 }
 export async function getChatMessages({ chatId }: { chatId: string }) {
   try {
-    const messagesQuery = messagesCollection.where("chatId", "==", chatId).orderBy("createdAt", "asc")
-    const messagesSnapshot = await messagesQuery.get()
-    
+    const messagesSnapshot = await messagesCollection.where("chatId", "==", chatId).get()
+
     const messages = messagesSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       createdAt: doc.data().createdAt?.toDate?.() || new Date(),
     }))
+    messages.sort((a: any, b: any) => {
+      const aTime = a.createdAt?.getTime?.() ?? 0;
+      const bTime = b.createdAt?.getTime?.() ?? 0;
+      return aTime - bTime;
+    })
 
     return { success: true, data: messages }
   } catch (err) {
