@@ -1,7 +1,7 @@
 import { Pinecone, type RecordMetadata } from "@pinecone-database/pinecone";
 
 export type ChunkMeta = RecordMetadata & {
-  docId: string;
+  fileId: string;
   chunkIndex: number;
   source: string;
   page?: number;
@@ -17,69 +17,30 @@ function getPineconeClient(): Pinecone {
     return new Pinecone({ apiKey });
 }
 
-export function getUserIndex(userId : string){
+export function getWorkspaceIndex(workspaceId: string) {
     const indexName = process.env.PINECONE_INDEX_NAME;
     if (!indexName) {
         throw new Error("Missing env var: PINECONE_INDEX_NAME");
     }
 
     const pc = getPineconeClient();
-  // Namespace per user 
-  return pc.index<ChunkMeta>(indexName).namespace(userId);
+    return pc.index<ChunkMeta>(indexName).namespace(workspaceId);
 }
-
-export async function upsertChunks(params: {
-  userId: string;
-  docId: string;
-  vectors: number[][];
-  chunks: { chunkText: string; chunkIndex: number; source: string; page?: number }[];
-}) {
-  const { userId, docId, vectors, chunks } = params;
-  const index = getUserIndex(userId);
-
-  if (vectors.length !== chunks.length) {
-    throw new Error(`Vectors/chunks length mismatch: ${vectors.length} vs ${chunks.length}`);
-  }
-
-  const dim = vectors[0]?.length ?? 0;
-  if (dim !== 3072) throw new Error(`Embedding dimension mismatch: expected 3072, got ${dim}`);
-
-  const records = chunks.map((c, i) => {
-    const metadata: ChunkMeta = {
-      docId,
-      chunkIndex: c.chunkIndex,
-      source: c.source,
-      chunkText: c.chunkText,
-      ...(c.page !== undefined ? { page: c.page } : {}),
-    };
-
-    return {
-      id: `${docId}:${c.chunkIndex}`,
-      values: vectors[i],
-      metadata,
-    };
-  });
-
-  await index.upsert(records);
-
-  return { inserted: chunks.length, dim };
-}
-
 
 export async function queryTopK(params: {
-  userId: string;
+  workspaceId: string;
   queryVector: number[];
   topK: number;
-  docId?: string;
+  fileId?: string;
 }) {
-  const { userId, queryVector, topK, docId } = params;
-  const index = getUserIndex(userId);
+  const { workspaceId, queryVector, topK, fileId } = params;
+  const index = getWorkspaceIndex(workspaceId);
 
   const res = await index.query({
     vector: queryVector,
     topK,
     includeMetadata: true,
-    ...(docId ? { filter: { docId: { $eq: docId } } } : {}),
+    ...(fileId ? { filter: { fileId: { $eq: fileId } } } : {}),
   });
 
   const matches = (res.matches ?? []).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
