@@ -108,6 +108,40 @@ export async function getWorkspaceById({ id }: { id: string }) {
   }
 }
 
+export async function getMessagesByChatId({ chatId }: { chatId: string }) {
+  try {
+    const snap = await messagesCollection
+      .where("chatId", "==", chatId)
+      .get();
+    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Sort client-side to avoid needing a composite index
+    docs.sort((a: any, b: any) => {
+      const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?._seconds ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?._seconds ?? 0;
+      return aTime - bTime;
+    });
+    return { success: true, data: docs };
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+    return { success: false, error: "Failed to fetch messages", data: [] };
+  }
+}
+
+export async function getWorkspaceFiles({ workspaceId }: { workspaceId: string }) {
+  try {
+    const snap = await workspacesCollection.doc(workspaceId).collection("files").get();
+    return snap.docs.map((d) => ({
+      id: d.id,
+      originalName: d.data().originalName ?? "Untitled",
+      mimeType: d.data().mimeType ?? "",
+      status: d.data().status ?? "unknown",
+    }));
+  } catch (err) {
+    console.error("Error fetching workspace files:", err);
+    return [];
+  }
+}
+
 export async function deleteChatById({ id, workspaceId }: { id: string, workspaceId: string }) {
   try {
     const batch = serverDB.batch()
