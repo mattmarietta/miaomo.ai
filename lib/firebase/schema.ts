@@ -80,3 +80,26 @@ export const workspaceFileSchema = z.object({
 
 export type DBWorkspaceFileSchema = z.infer<typeof workspaceFileSchema>;
 
+export const highlightRectSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+});
+
+export const highlightSchema = z.object({
+  id: z.string(),
+  documentId: z.string(),
+  userId: z.string(),
+  pageNumber: z.number(),
+  start: z.number(),
+  end: z.number(),
+  text: z.string(),
+  color: z.string(),
+  rects: z.array(highlightRectSchema),
+  createdAt: z.any(),
+});
+
+export type HighlightRect = z.infer<typeof highlightRectSchema>;
+export type DBHighlightSchema = z.infer<typeof highlightSchema>;
+

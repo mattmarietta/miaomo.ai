@@ -7,8 +7,7 @@ import { Chat } from "@/components/chat/Chat";
 import { ChatAgent } from "@/app/api/chat/ai";
 import { subscribeWorkspaceFiles } from "@/lib/firebase/client-queries";
 import { DBWorkspaceFileSchema } from "@/lib/firebase/schema";
-import { X, FileText } from "lucide-react";
-import Link from "next/link";
+import { PdfViewer } from "@/components/PdfViewer";
 import {
   Dialog,
   DialogContent,
@@ -106,43 +105,16 @@ export default function WorkspacePage() {
 
       {/* PDF Viewer — right panel */}
       {selectedFile && selectedFileUrl && (
-        <div className="w-[45%] max-w-2xl border-l border-border flex flex-col min-h-0 bg-muted/30">
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <span className="text-xs font-medium truncate">
-                {selectedFile.originalName || "Document"}
-              </span>
-            </div>
-            <Link
-              href={`/workspace/${id}`}
-              className="p-1 rounded-md hover:bg-muted transition-colors"
-            >
-              <X className="size-4 text-muted-foreground" />
-            </Link>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-h-0">
-            {selectedFileUrl ? (
-              // Display PDF using iframe
-              <iframe
-                src={selectedFileUrl}
-                className="w-full h-full border-0"
-                title={selectedFile.originalName || "Document viewer"}
-              />
-            ) : (
-              // Fallback for when no file is selected
-              <div className="p-8 bg-white text-black min-h-full">
-                <div className="max-w-4xl mx-auto">
-                  <div className="text-muted-foreground text-center py-8">
-                    Select a file to view its content
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="w-[45%] max-w-2xl border-l border-border flex flex-col min-h-0">
+          <PdfViewer
+            fileUrl={selectedFileUrl}
+            fileName={selectedFile.originalName || "Document"}
+            fileId={selectedFile.id}
+            workspaceId={id}
+            userId={user.uid}
+            onClose={() => router.push(`/workspace/${id}`)}
+            onSendToChat={(text) => setExternalMessage(text)}
+          />
         </div>
       )}
       

@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, doc, setDoc, Timestamp, query, where, onSnapshot } from "firebase/firestore";
-import { DBChatSchema, DBWorkspaceSchema, DBWorkspaceFileSchema } from "@/lib/firebase/schema";
+import { collection, doc, setDoc, deleteDoc, Timestamp, query, where, onSnapshot } from "firebase/firestore";
+import { DBChatSchema, DBWorkspaceSchema, DBWorkspaceFileSchema, DBHighlightSchema } from "@/lib/firebase/schema";
 
 
 // ── Workspaces ──
@@ -120,6 +120,63 @@ export async function updateWorkspaceFileStatus(
         ...additionalData,
     }, { merge: true });
 }
+
+// ── Highlights ──
+
+export async function addHighlight(
+    workspaceId: string,
+    fileId: string,
+    highlight: Omit<DBHighlightSchema, "createdAt">,
+) {
+    const highlightsCol = collection(db, "workspaces", workspaceId, "files", fileId, "highlights");
+    const ref = doc(highlightsCol, highlight.id);
+    await setDoc(ref, {
+        ...highlight,
+        createdAt: Timestamp.now(),
+    });
+    return ref.id;
+}
+
+export async function deleteHighlight(
+    workspaceId: string,
+    fileId: string,
+    highlightId: string,
+) {
+    const ref = doc(db, "workspaces", workspaceId, "files", fileId, "highlights", highlightId);
+    await deleteDoc(ref);
+}
+
+export function subscribeHighlights(
+    workspaceId: string,
+    fileId: string,
+    userId: string,
+    onHighlights: (highlights: DBHighlightSchema[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const highlightsCol = collection(db, "workspaces", workspaceId, "files", fileId, "highlights");
+    const q = query(highlightsCol, where("userId", "==", userId));
+    return onSnapshot(
+        q,
+        (snap) => {
+            const highlights = snap.docs.map((d) => ({
+                ...d.data(),
+                id: d.id,
+            } as DBHighlightSchema));
+            highlights.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis?.() ?? 0;
+                const bTime = b.createdAt?.toMillis?.() ?? 0;
+                return bTime - aTime;
+            });
+            onHighlights(highlights);
+        },
+        (err) => {
+            console.error("subscribeHighlights error:", err);
+            onError?.(err);
+        },
+    );
+}
+
+// ── Chats ──
 
 export function subscribeWorkspaceChats(
     workspaceId: string,
