@@ -308,6 +308,16 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
 
                     <div className="flex items-center justify-between px-3 pb-2">
                         <div className="flex items-center gap-1">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 rounded-full text-xs gap-1.5"
+                                onClick={() => router.push("/workspace/quiz-builder")}
+                            >
+                                <BookOpen size={14} />
+                                Study Tools
+                            </Button>
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -419,15 +429,6 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
                 </div>
 
                 {renderInputBar()}
-
-                { /*Study Tools button*/ }
-                <button
-                    onClick={() => router.push("/workspace/quiz-builder")}
-                    className="absolute bottom-6 left-6 px-4 py-2 border rounded-xl text-sm hover:bg-muted"
-                >
-                    <BookOpen size={16} />
-                    Study Tools
-                </button>
             </div>
         );
     }

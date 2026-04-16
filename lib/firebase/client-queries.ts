@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, doc, setDoc, Timestamp, query, where, onSnapshot } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, getDocs, Timestamp, query, where, onSnapshot } from "firebase/firestore";
 import { DBChatSchema, DBWorkspaceSchema, DBWorkspaceFileSchema } from "@/lib/firebase/schema";
 
 
@@ -17,6 +17,29 @@ export async function createWorkspace(userId: string, title: string): Promise<st
         updatedAt: Timestamp.now(),
     });
     return ref.id;
+}
+
+// Delete a workspace and all its files/chats from Firestore
+// TODO: also delete the actual files from Firebase Storage
+export async function deleteWorkspace(workspaceId: string, userId: string) {
+    // Get all files owned by this user in the workspace
+    const filesRef = collection(db, "workspaces", workspaceId, "files");
+    const filesQuery = query(filesRef, where("ownerUid", "==", userId));
+    const files = await getDocs(filesQuery);
+    for (const file of files.docs) {
+        await deleteDoc(file.ref);
+    }
+
+    // Get all chats owned by this user in the workspace
+    const chatsRef = collection(db, "workspaces", workspaceId, "chats");
+    const chatsQuery = query(chatsRef, where("ownerUid", "==", userId));
+    const chats = await getDocs(chatsQuery);
+    for (const chat of chats.docs) {
+        await deleteDoc(chat.ref);
+    }
+
+    // Finally, delete the workspace itself
+    await deleteDoc(doc(db, "workspaces", workspaceId));
 }
 
 export function subscribeWorkspacesByUserId(

@@ -192,7 +192,7 @@ export default function DeckEditorPage() {
           </button>
           <button
             onClick={() => setShowAIModal(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted"
+            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-90"
           >
             <Sparkles size={16} />
             AI Generate
