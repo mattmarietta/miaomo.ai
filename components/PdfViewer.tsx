@@ -12,6 +12,8 @@ import {
   Trash2,
   MessageSquareText,
   Highlighter,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,6 +90,8 @@ export function PdfViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const [textLayerEl, setTextLayerEl] = useState<HTMLElement | null>(null);
+  const [scale, setScale] = useState(1.0);
+
 
   // Measure container width for responsive PDF scaling
   useEffect(() => {
@@ -122,6 +126,8 @@ export function PdfViewer({
     setTextLayerEl(el as HTMLElement ?? null);
   }, []);
 
+  const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 3.0));
+  const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
   // Text selection handler scoped to text layer.
   // Depends on textLayerEl (state) so it re-attaches when the element appears.
   useEffect(() => {
@@ -250,6 +256,22 @@ export function PdfViewer({
             variant="ghost"
             size="icon-sm"
             className="h-7 w-7"
+            onClick={() => setScale(Math.max(0.1, scale - 0.1))}
+            title="Zoom out">
+            <ZoomOutIcon className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="h-7 w-7"
+            onClick={() => setScale(Math.max(0.1, scale + 0.1))}
+            title="Zoom in">
+            <ZoomInIcon className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="h-7 w-7"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             title="Toggle highlights"
           >
@@ -323,6 +345,8 @@ export function PdfViewer({
                   renderTextLayer={true}
                   renderAnnotationLayer={false}
                   width={containerWidth - 32}
+                  // Adding a scale factor with a + or - that updates the users view on the PDF
+                  scale={scale}
                   onRenderSuccess={onPageRenderSuccess}
                 />
               </Document>
