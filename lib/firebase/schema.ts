@@ -73,6 +73,7 @@ export const workspaceFileSchema = z.object({
   chunkCount: z.number().optional(),
   vectorCount: z.number().optional(),
   errorMessage: z.string().optional(),
+  fullText: z.string().optional(),
   createdAt: z.any(),
   updatedAt: z.any(),
 });

@@ -20,13 +20,16 @@ import {
   Plus,
   Paperclip,
   ChevronDown,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, updateWorkspaceFileStatus } from "@/lib/firebase/client-queries";
 import { Badge } from "@/components/ui/badge";
 import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
 import { 
@@ -34,10 +37,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger, 
 } from "@/components/ui/collapsible";
-import { int, string } from "zod";
-import { StringValidation } from "zod/v3";
-
-// interfaces for stats
 
 interface ConceptScore {
   name: string;
@@ -60,8 +59,6 @@ function masteryTextColor(pct: number): string {
   if (pct >= 45) return "text-amber-500";
   return "text-red-500";
 }
-
-// mock stats for demonstration purposes
 
 const MOCK_STATS: Record<string, FileStats> = {
   "file-1": {
@@ -91,12 +88,10 @@ const MOCK_STATS: Record<string, FileStats> = {
   },
 }
 
-// temp helper function
 function getStats(fileId: string, index: number): FileStats | undefined {
-  return MOCK_STATS[fileId] ??  MOCK_STATS[`file-${index + 1}`];
+  return MOCK_STATS[fileId] ?? MOCK_STATS[`file-${index + 1}`];
 }
 
-// temp function to combine the three mock stat scores into one percentage
 function getWorkspaceMastery(files: DBWorkspaceFileSchema[]): number | null {
   const quizzed = files
     .map((f, i) => getStats(f.id, i))
@@ -149,7 +144,7 @@ export const AppSidebarWorkspaceView = ({
       async () => {
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
-          await addWorkspaceFile(workspaceId, {
+          const fileId = await addWorkspaceFile(workspaceId, {
             originalName: file.name,
             mimeType: file.type || "application/octet-stream",
             size: file.size,
@@ -157,6 +152,55 @@ export const AppSidebarWorkspaceView = ({
             downloadUrl: url,
             ownerUid: user.uid,
           });
+
+          // Check if file type supports OCR
+          const ocrSupportedTypes = [
+            "application/pdf",
+            "image/tiff",
+            "image/tif",
+            "image/gif",
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/bmp",
+            "image/webp",
+          ];
+
+          if (ocrSupportedTypes.includes(file.type.toLowerCase())) {
+            // Trigger OCR processing
+            try {
+              await updateWorkspaceFileStatus(workspaceId, fileId, "processing_ocr");
+              
+              const ocrResponse = await fetch("/api/ocr/url", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  url,
+                  mimeType: file.type,
+                }),
+              });
+
+              if (ocrResponse.ok) {
+                const ocrResult = await ocrResponse.json();
+                // Store the extracted text and update status
+                await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_completed", {
+                  fullText: ocrResult.fullText,
+                });
+              } else {
+                const errorData = await ocrResponse.json();
+                await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_failed", {
+                  errorMessage: errorData.error || "OCR processing failed",
+                });
+              }
+            } catch (ocrError) {
+              console.error("OCR processing error:", ocrError);
+              await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_failed", {
+                errorMessage: ocrError instanceof Error ? ocrError.message : "Unknown OCR error",
+              });
+            }
+          }
         } catch (err) {
           console.error(err);
         } finally {
@@ -219,6 +263,19 @@ export const AppSidebarWorkspaceView = ({
               const stats = getStats(file.id, index);
               const isOpen = openFileId === file.id;
 
+              const getStatusIcon = () => {
+                switch (file.status) {
+                  case "processing_ocr":
+                    return <Loader2 className="size-3.5 shrink-0 text-blue-500 animate-spin ml-2" />;
+                  case "ocr_completed":
+                    return <CheckCircle className="size-3.5 shrink-0 text-green-500 ml-2" />;
+                  case "ocr_failed":
+                    return <XCircle className="size-3.5 shrink-0 text-red-500 ml-2" />;
+                  default:
+                    return null;
+                }
+              };
+
               return (
                 <SidebarMenuItem key={file.id}>
                   <Collapsible
@@ -227,7 +284,6 @@ export const AppSidebarWorkspaceView = ({
                       setOpenFileId(open ? file.id : null)
                     }
                   >
-                    {/* File row */}
                     <div className="flex items-center gap-1 w-full">
                       <SidebarMenuButton asChild className="flex-1 min-w-0 gap-2" size="sm">
                         <Link href={href}>
@@ -238,7 +294,8 @@ export const AppSidebarWorkspaceView = ({
                         </Link>
                       </SidebarMenuButton>
 
-                      {/* Mastery */}
+                      {getStatusIcon()}
+
                       {stats && (
                         <CollapsibleTrigger className="flex items-center gap-0.5 shrink-0 rounded px-1 py-0.5 hover:bg-sidebar-accent transition-colors">
                           <span className={`text-[10px] font-medium ${masteryTextColor(stats.masteryPct)}`}>
@@ -253,7 +310,6 @@ export const AppSidebarWorkspaceView = ({
                       )}
                     </div>
 
-                    {/* Mastery bar */}
                     {stats && (
                       <div className="px-2 pt-0.5 pb-1">
                         <Progress value={stats.masteryPct} className="h-[3px]">
@@ -261,11 +317,9 @@ export const AppSidebarWorkspaceView = ({
                             <ProgressIndicator className={masteryBarColor(stats.masteryPct)} />
                           </ProgressTrack>
                         </Progress>
-                          
                       </div>
                     )}
 
-                    {/* Concept breakdown */}
                     {stats && (
                       <CollapsibleContent>
                         <div className="mx-2 mb-2 rounded-md border border-border/50 bg-muted/40 px-3 py-2 space-y-2">
@@ -293,7 +347,6 @@ export const AppSidebarWorkspaceView = ({
                       </CollapsibleContent>
                     )}
 
-                    {/* Not quizzed */}
                     {!stats && (
                       <span className="px-2 pb-1 text-[10px] text-muted-foreground/40 block">
                         not quizzed yet!
@@ -334,7 +387,7 @@ export const AppSidebarWorkspaceView = ({
                 asChild
                 className="gap-2"
                 size="sm"
-                isActive={pathname === `/workspace/${workspaceId}`}
+                isActive={pathname === `/workspace/${workspaceId}` && !pathname.includes('/chat/')}
               >
                 <Link href={`/workspace/${workspaceId}`}>
                   <Plus className="size-3.5 shrink-0 text-muted-foreground" />
