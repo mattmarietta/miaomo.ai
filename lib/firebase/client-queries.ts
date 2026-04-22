@@ -130,8 +130,15 @@ export async function addHighlight(
 ) {
     const highlightsCol = collection(db, "workspaces", workspaceId, "files", fileId, "highlights");
     const ref = doc(highlightsCol, highlight.id);
+    console.debug("[highlights] addHighlight", {
+        workspaceId,
+        fileId,
+        userId: highlight.userId,
+        highlightId: highlight.id,
+    });
     await setDoc(ref, {
         ...highlight,
+        fileId,
         createdAt: Timestamp.now(),
     });
     return ref.id;
@@ -155,6 +162,7 @@ export function subscribeHighlights(
 ) {
     const highlightsCol = collection(db, "workspaces", workspaceId, "files", fileId, "highlights");
     const q = query(highlightsCol, where("userId", "==", userId));
+    console.debug("[highlights] subscribeHighlights:start", { workspaceId, fileId, userId });
     return onSnapshot(
         q,
         (snap) => {
@@ -166,6 +174,12 @@ export function subscribeHighlights(
                 const aTime = a.createdAt?.toMillis?.() ?? 0;
                 const bTime = b.createdAt?.toMillis?.() ?? 0;
                 return bTime - aTime;
+            });
+            console.debug("[highlights] subscribeHighlights:update", {
+                workspaceId,
+                fileId,
+                userId,
+                count: highlights.length,
             });
             onHighlights(highlights);
         },
