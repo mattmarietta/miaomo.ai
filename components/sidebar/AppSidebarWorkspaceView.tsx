@@ -181,7 +181,9 @@ export const AppSidebarWorkspaceView = ({
               // Build URL with file query param so workspace page can show it
               const href =
                 isPdf && fileUrl
-                  ? `/workspace/${workspaceId}?file=${encodeURIComponent(file.id)}`
+                  ? pathname.includes("/chat/")
+                    ? `${pathname}?file=${encodeURIComponent(file.id)}`
+                    : `/workspace/${workspaceId}?file=${encodeURIComponent(file.id)}`
                   : `/workspace/${workspaceId}`;
 
               const getStatusIcon = () => {
