@@ -51,9 +51,11 @@ interface ChatProps {
     externalMessage?: string;
     onExternalMessageSent?: () => void;
     hideExternalMessage?: boolean;
+    selectedFileId?: string | null;
+    onSourceArticles?: () => void;
 }
 
-export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
+export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage, selectedFileId, onSourceArticles }: ChatProps) {
     const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         id: chatId,
@@ -86,6 +88,11 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
         const q = mentionQuery.toLowerCase();
         return files.filter((f) => (f.originalName || "").toLowerCase().includes(q));
     }, [files, mentionQuery]);
+
+    const selectedFile = useMemo(() => {
+        if (!selectedFileId) return null;
+        return files.find((f) => f.id === selectedFileId) || null;
+    }, [selectedFileId, files]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -373,6 +380,19 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                     ) : (
                                         <Paperclip size={14} />
                                     )}
+                                </Button>
+                            )}
+
+                            {selectedFile && selectedFile.fullText && onSourceArticles && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 rounded-full text-xs text-muted-foreground hover:text-foreground gap-1"
+                                    onClick={onSourceArticles}
+                                >
+                                    <Search size={12} />
+                                    Source Articles
                                 </Button>
                             )}
 

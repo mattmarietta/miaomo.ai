@@ -102,6 +102,12 @@ export default function WorkspaceChatPage() {
     setSummaryDialogFile(null);
   };
 
+  const handleSourceArticles = () => {
+    if (!selectedFile || !selectedFile.fullText) return;
+    const articlesMessage = `Please find and source related articles for the following document text:\n\n${selectedFile.fullText}\n\nPlease provide links and summaries of related articles.`;
+    setExternalMessage(articlesMessage);
+  };
+
   const handleExternalMessageSent = () => {
     setExternalMessage("");
   };
@@ -136,6 +142,8 @@ export default function WorkspaceChatPage() {
           externalMessage={externalMessage}
           onExternalMessageSent={handleExternalMessageSent}
           hideExternalMessage={true}
+          selectedFileId={selectedFileId}
+          onSourceArticles={handleSourceArticles}
           onFileClick={(file) => {
             router.push(`/workspace/${id}/chat/${chatId}?file=${encodeURIComponent(file.id)}`)
           }}
