@@ -69,9 +69,9 @@ export default function WorkspaceChatPage() {
         });
 
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as { messages: ChatAgent[] };
           // Convert DB messages to ChatAgent format
-          const messages: ChatAgent[] = data.messages.map((msg: any) => ({
+          const messages: ChatAgent[] = data.messages.map((msg) => ({
             id: msg.id,
             role: msg.role,
             parts: msg.parts,
@@ -91,7 +91,7 @@ export default function WorkspaceChatPage() {
     return files.find((f) => f.id === selectedFileId) || null;
   }, [selectedFileId, files]);
 
-  const selectedFileUrl = selectedFile ? (selectedFile as any).downloadUrl : null;
+  const selectedFileUrl = selectedFile?.downloadUrl ?? null;
 
   const handleGenerateSummary = () => {
     if (!summaryDialogFile || !summaryDialogFile.fullText) return;
@@ -116,9 +116,15 @@ export default function WorkspaceChatPage() {
   if (!user) return null;
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* Chat — center */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Chat — left */}
+      <div
+        className={
+          selectedFile && selectedFileUrl
+            ? "w-[34rem] min-w-[22rem] max-w-[42%] shrink-0 flex flex-col min-h-0 border-r border-border"
+            : "flex-1 min-w-0 flex flex-col min-h-0"
+        }
+      >
         <Chat
           key={chatId}
           user={user}
@@ -134,9 +140,9 @@ export default function WorkspaceChatPage() {
         />
       </div>
 
-      {/* PDF Viewer — right panel */}
+      {/* PDF Viewer — centered PDF with tools on the right */}
       {selectedFile && selectedFileUrl && (
-        <div className="w-[45%] max-w-2xl border-l border-border flex flex-col min-h-0">
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <PdfViewer
             fileUrl={selectedFileUrl}
             fileName={selectedFile.originalName || "Document"}
@@ -155,7 +161,7 @@ export default function WorkspaceChatPage() {
           <DialogHeader>
             <DialogTitle>Text Processing Complete</DialogTitle>
             <DialogDescription>
-              Text processing has finished for "{summaryDialogFile?.originalName}".
+              Text processing has finished for &quot;{summaryDialogFile?.originalName}&quot;.
               Would you like to generate an initial summary of this document?
             </DialogDescription>
           </DialogHeader>
