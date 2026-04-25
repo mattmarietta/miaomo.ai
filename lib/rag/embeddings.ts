@@ -1,9 +1,9 @@
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 
 export function GetEmbeddingsClient(){
-    const googleKey = process.env.GOOGLE_API_KEY;
+    const googleKey = process.env.GOOGLE_AI_STUDIO_API_KEY;
     if (!googleKey) {
-        throw new Error("Missing env var: GOOGLE_API_KEY");
+        throw new Error("Missing env var: GOOGLE_AI_STUDIO_API_KEY");
     }
 
     // Create the embedding instance
@@ -23,6 +23,9 @@ export async function embedDocuments(texts: string[]) {
 }
 
 export async function embedQuery(text: string) {
+  if (!text || typeof text !== "string") {
+    throw new Error(`embedQuery received invalid input: ${typeof text}`);
+  }
   const emb = GetEmbeddingsClient();
   const vector = await emb.embedQuery(text);
   return vector;

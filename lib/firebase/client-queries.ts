@@ -50,6 +50,11 @@ export function subscribeWorkspacesByUserId(
     );
 }
 
+export function generateWorkspaceFileId(workspaceId: string): string {
+    const filesCol = collection(db, "workspaces", workspaceId, "files");
+    return doc(filesCol).id;
+}
+
 export async function addWorkspaceFile(
     workspaceId: string,
     fileData: {
@@ -60,9 +65,10 @@ export async function addWorkspaceFile(
         downloadUrl: string;
         ownerUid: string;
     },
+    fileId?: string,
 ) {
     const filesCol = collection(db, "workspaces", workspaceId, "files");
-    const ref = doc(filesCol);
+    const ref = fileId ? doc(filesCol, fileId) : doc(filesCol);
     await setDoc(ref, {
         id: ref.id,
         originalName: fileData.originalName,
@@ -71,8 +77,8 @@ export async function addWorkspaceFile(
         storagePath: fileData.storagePath,
         downloadUrl: fileData.downloadUrl,
         ownerUid: fileData.ownerUid,
-        workspaceID: workspaceId,
-        status: "uploaded",
+        workspaceId: workspaceId,
+        status: "pending",
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
     });
@@ -219,4 +225,18 @@ export function subscribeWorkspaceChats(
             onError?.(err);
         },
     );
+}
+
+// ── Messages ──
+
+const messagesCollection = collection(db, "messages");
+
+export async function getMessagesByChatId(chatId: string) {
+    const q = query(
+        messagesCollection,
+        where("chatId", "==", chatId),
+        orderBy("createdAt", "asc"),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as DBMessageSchema & { id: string }));
 }

@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Check, ChevronDown, Paperclip, Loader2, FileText, X, BookOpen } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Paperclip, Loader2, FileText, X, BookOpen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -13,13 +13,30 @@ import { ChatAgent } from "@/app/api/chat/ai";
 import { User } from "firebase/auth";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, generateWorkspaceFileId } from "@/lib/firebase/client-queries";
 import { DBWorkspaceFileSchema } from "@/lib/firebase/schema";
+
+interface ToolInvocationPart {
+    type: "tool-invocation";
+    toolInvocation: {
+        toolName: string;
+        state: "call" | "result" | "partial-call";
+        args?: Record<string, unknown>;
+        result?: unknown;
+    };
+}
+
+interface TextPart {
+    type: "text";
+    text?: string;
+}
+
+type MessagePart = TextPart | ToolInvocationPart | { type: string };
 
 interface Message {
     id: string;
     role: "user" | "assistant";
-    parts: { type: string; text?: string }[];
+    parts: MessagePart[];
 }
 
 const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
@@ -27,6 +44,7 @@ const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
 interface ChatProps {
     user: User;
     initialMessages: ChatAgent[];
+    chatId?: string;
     workspaceId?: string;
     files?: DBWorkspaceFileSchema[];
     onFileClick?: (file: DBWorkspaceFileSchema) => void;
@@ -35,9 +53,10 @@ interface ChatProps {
     hideExternalMessage?: boolean;
 }
 
-export function Chat({ user, initialMessages, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
+export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
     const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
+        id: chatId,
         transport: new DefaultChatTransport({
             api: "/api/chat",
             body: workspaceId ? { workspaceId } : undefined,
@@ -219,7 +238,8 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
         setUploading(true);
         setUploadProgress(0);
 
-        const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
+        const fileId = generateWorkspaceFileId(workspaceId);
+        const storagePath = `workspaces/${workspaceId}/files/${fileId}/${file.name}`;
         const storageRef = ref(storage, storagePath);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -242,7 +262,7 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
                         storagePath,
                         downloadUrl: url,
                         ownerUid: user.uid,
-                    });
+                    }, fileId);
                 } catch (err) {
                     console.error("Error saving file metadata:", err);
                 } finally {
@@ -462,32 +482,136 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
             <div className="flex-1 overflow-y-auto">
                 <div className="max-w-3xl mx-auto px-5 py-5">
                     <div className="flex flex-col gap-6">
-                        {(messages as Message[]).map((message, index) => {
-                            // Hide the first external message if hideExternalMessage is true
-                            if (hideExternalMessage && lastMessageWasExternal && index === 0 && message.role === "user") {
-                                return null;
-                            }
-                            
+                        {(messages as Message[]).map((message) => {
+                            const isUser = message.role === "user";
                             return (
-                                <div key={message.id}>
-                                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                                        {message.role === "user" ? "You" : "Assistant"}
-                                    </p>
-                                    <div className="text-[14px] leading-relaxed text-foreground prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:bg-muted prose-pre:rounded-lg prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
-                                        {message.parts.map((part: { type: string; text?: string }, i: number) => {
-                                            switch (part.type) {
-                                                case "text":
+                            <div key={message.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+                                <div className={`${isUser ? "max-w-[85%]" : "max-w-full w-full"}`}>
+                                    {!isUser && (
+                                        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                                            Assistant
+                                        </p>
+                                    )}
+                                    <div className={`text-[14px] leading-relaxed ${
+                                        isUser
+                                            ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5"
+                                            : "text-foreground prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:bg-muted prose-pre:rounded-lg prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none"
+                                    }`}>
+                                    {message.parts.map((part: MessagePart, i: number) => {
+                                        switch (part.type) {
+                                            case "text": {
+                                                const rawText = (part as TextPart).text || "";
+                                                const fileRefPattern = /\[Referencing file: (.+?)\]/g;
+                                                const referencedFiles: string[] = [];
+                                                let match;
+                                                while ((match = fileRefPattern.exec(rawText)) !== null) {
+                                                    referencedFiles.push(match[1]);
+                                                }
+                                                const displayText = rawText
+                                                    .replace(/\[Referencing file: .+?\]\n*/g, "")
+                                                    .trim();
+
+                                                if (isUser) {
                                                     return (
-                                                        <Markdown key={`${message.id}-${i}`}>
-                                                            {part.text || ""}
-                                                        </Markdown>
+                                                        <div key={`${message.id}-${i}`}>
+                                                            {referencedFiles.length > 0 && (
+                                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                                    {referencedFiles.map((name) => {
+                                                                        const matchedFile = files.find((f) => f.originalName === name);
+                                                                        const ext = name.split(".").pop()?.toUpperCase() || "FILE";
+                                                                        return (
+                                                                            <button
+                                                                                key={name}
+                                                                                type="button"
+                                                                                onClick={() => matchedFile && onFileClick?.(matchedFile)}
+                                                                                className="flex items-center gap-2.5 rounded-xl bg-primary-foreground/15 backdrop-blur-sm px-3 py-2 text-left transition-all hover:bg-primary-foreground/25 cursor-pointer group"
+                                                                            >
+                                                                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary-foreground/20 group-hover:bg-primary-foreground/30 transition-colors">
+                                                                                    <FileText size={16} className="text-primary-foreground" />
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <p className="text-[13px] font-medium text-primary-foreground truncate max-w-[200px]">{name}</p>
+                                                                                    <p className="text-[10px] text-primary-foreground/60">
+                                                                                        {ext}
+                                                                                        {matchedFile?.size ? ` · ${(matchedFile.size / 1024).toFixed(0)} KB` : ""}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                            {displayText && <p className="m-0 whitespace-pre-wrap">{displayText}</p>}
+                                                        </div>
                                                     );
-                                                default:
-                                                    return null;
+                                                }
+
+                                                return (
+                                                    <Markdown key={`${message.id}-${i}`}>
+                                                        {displayText}
+                                                    </Markdown>
+                                                );
                                             }
-                                        })}
+                                            case "tool-invocation": {
+                                                const { toolInvocation } = part as ToolInvocationPart;
+                                                if (toolInvocation.toolName === "searchDocuments") {
+                                                    const rawQuery = toolInvocation.args?.query ?? toolInvocation.args?.queries;
+                                                    const query = Array.isArray(rawQuery) ? rawQuery[0] : rawQuery;
+                                                    const isDone = toolInvocation.state === "result";
+                                                    const results = isDone ? ((toolInvocation.result as any)?.results ?? []) : [];
+                                                    const resultCount = results.length;
+                                                    const sourceFiles: string[] = isDone
+                                                        ? [...new Set(results.map((r: any) => r.fileName).filter(Boolean))] as string[]
+                                                        : [];
+                                                    return (
+                                                        <div
+                                                            key={`${message.id}-${i}`}
+                                                            className={`flex items-start gap-2.5 py-2.5 px-3.5 my-2 rounded-xl text-xs transition-colors ${
+                                                                isDone
+                                                                    ? "bg-emerald-500/5 border border-emerald-500/15 text-muted-foreground"
+                                                                    : "bg-muted/50 border border-border/50 text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            {isDone ? (
+                                                                <div className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10 mt-0.5 shrink-0">
+                                                                    <Search size={11} className="text-emerald-600 dark:text-emerald-400" />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 mt-0.5 shrink-0">
+                                                                    <Loader2 size={11} className="animate-spin text-primary" />
+                                                                </div>
+                                                            )}
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className={isDone ? "text-emerald-700 dark:text-emerald-300 font-medium" : ""}>
+                                                                    {isDone
+                                                                        ? `Found ${resultCount} result${resultCount !== 1 ? "s" : ""}`
+                                                                        : `Searching for "${query}"...`
+                                                                    }
+                                                                </span>
+                                                                {isDone && <span className="text-muted-foreground"> for &ldquo;{query}&rdquo;</span>}
+                                                                {isDone && sourceFiles.length > 0 && (
+                                                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                        {sourceFiles.map((name: string) => (
+                                                                            <span key={name} className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-medium">
+                                                                                <FileText size={10} />
+                                                                                {decodeURIComponent(name)}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }
+                                            default:
+                                                return null;
+                                        }
+                                    })}
                                     </div>
                                 </div>
+                            </div>
                             );
                         })}
 

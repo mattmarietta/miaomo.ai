@@ -20,14 +20,8 @@ import { Button } from "@/components/ui/button";
 
 export default function WorkspacePage() {
   const { id } = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
-  const selectedFileId = searchParams.get("file");
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [files, setFiles] = useState<DBWorkspaceFileSchema[]>([]);
-  const [previousFiles, setPreviousFiles] = useState<DBWorkspaceFileSchema[]>([]);
-  const [summaryDialogFile, setSummaryDialogFile] = useState<DBWorkspaceFileSchema | null>(null);
-  const [externalMessage, setExternalMessage] = useState<string>("");
 
   useEffect(() => {
     if (loading) return;
@@ -35,54 +29,10 @@ export default function WorkspacePage() {
       router.push("/login");
       return;
     }
-  }, [user, loading, router]);
-
-  useEffect(() => {
-    if (!id || !user) return;
-    const unsub = subscribeWorkspaceFiles(id, user.uid, (newFiles) => {
-      // Check for OCR completion
-      newFiles.forEach((newFile) => {
-        const prevFile = previousFiles.find((f) => f.id === newFile.id);
-        if (prevFile && prevFile.status !== "ocr_completed" && newFile.status === "ocr_completed") {
-          // OCR just completed for this file
-          setSummaryDialogFile(newFile);
-        }
-      });
-      
-      setFiles(newFiles);
-      setPreviousFiles(newFiles);
-    });
-    return () => unsub();
-  }, [id, user, previousFiles]);
-
-  const selectedFile = useMemo(() => {
-    if (!selectedFileId) return null;
-    return files.find((f) => f.id === selectedFileId) || null;
-  }, [selectedFileId, files]);
-
-  const selectedFileUrl = selectedFile ? (selectedFile as any).downloadUrl : null;
-
-  const handleGenerateSummary = () => {
-    if (!summaryDialogFile || !summaryDialogFile.fullText) return;
-    
-    const summaryMessage = `Please provide a summary of the following document:\n\n${summaryDialogFile.fullText}\n\nPlease summarize the key points from this document.`;
-    setExternalMessage(summaryMessage);
-    setSummaryDialogFile(null);
-  };
-
-  const handleExternalMessageSent = () => {
-    setExternalMessage("");
-  };
-
-  if (loading) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) return null;
+    // Redirect to a new chat with a generated ID
+    const newChatId = crypto.randomUUID();
+    router.replace(`/workspace/${id}/chat/${newChatId}`);
+  }, [user, loading, router, id]);
 
   return (
     <div className="flex flex-1 min-h-0">

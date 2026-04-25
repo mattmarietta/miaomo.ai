@@ -6,10 +6,12 @@ import { useAuth } from "@/components/Auth";
 import { Quiz, getUserQuizzes, createQuiz, deleteQuiz, updateQuiz } from "@/lib/firebase/quizStore";
 import { Flashcard, getUserDecks, createDeck, deleteDeck } from "@/lib/firebase/flashcardStore";
 import { generateQuestionsFromText } from "@/lib/aiQuizGenerator";
-import { ArrowLeft, Plus, FileText, Trash2, Play, Sparkles, Layers, Upload, ClipboardPaste, X } from "lucide-react";
+import { subscribeWorkspacesByUserId, subscribeWorkspaceFiles } from "@/lib/firebase/client-queries";
+import { DBWorkspaceSchema, DBWorkspaceFileSchema } from "@/lib/firebase/schema";
+import { ArrowLeft, Plus, FileText, Trash2, Play, Sparkles, Layers, Upload, ClipboardPaste, X, FolderOpen, Search, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 type Tab = "quizzes" | "flashcards";
-type QuizCreateMode = "select" | "paste" | "empty";
+type QuizCreateMode = "select" | "paste" | "empty" | "workspace";
 
 const MIN_CHARS = 300;
 const MAX_CHARS = 100000;
@@ -47,6 +49,16 @@ export default function StudyToolsPage() {
   const [includeWritten, setIncludeWritten] = useState(true);
   const [includeMatching, setIncludeMatching] = useState(false);
 
+  // Workspace RAG state
+  const [workspaces, setWorkspaces] = useState<DBWorkspaceSchema[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [workspaceFiles, setWorkspaceFiles] = useState<DBWorkspaceFileSchema[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [ragQuery, setRagQuery] = useState("");
+  const [ragRetrieving, setRagRetrieving] = useState(false);
+  const [ragChunks, setRagChunks] = useState<{ text: string; source: string; fileId: string }[]>([]);
+  const [ragError, setRagError] = useState("");
+
   // Flashcard create modal
   const [showDeckModal, setShowDeckModal] = useState(false);
   const [deckTitle, setDeckTitle] = useState("");
@@ -79,6 +91,120 @@ export default function StudyToolsPage() {
     }
     load();
   }, [user]);
+
+  // Subscribe to workspaces
+  useEffect(() => {
+    if (!user) return;
+    const unsub = subscribeWorkspacesByUserId(user.uid, setWorkspaces);
+    return () => unsub();
+  }, [user]);
+
+  // Subscribe to files when workspace selected
+  useEffect(() => {
+    if (!selectedWorkspaceId || !user) {
+      setWorkspaceFiles([]);
+      return;
+    }
+    const unsub = subscribeWorkspaceFiles(selectedWorkspaceId, user.uid, setWorkspaceFiles);
+    return () => unsub();
+  }, [selectedWorkspaceId, user]);
+
+  // Indexed files (status === "done" with vectors)
+  const indexedFiles = workspaceFiles.filter(
+    (f) => f.status === "done" && (f.vectorCount ?? 0) > 0
+  );
+
+  // Retrieve RAG chunks from workspace
+  async function handleRagRetrieve() {
+    if (!selectedWorkspaceId || !ragQuery.trim()) return;
+    setRagRetrieving(true);
+    setRagError("");
+    setRagChunks([]);
+
+    try {
+      const fileIds = Array.from(selectedFileIds);
+      // If specific files selected, query per file; otherwise query whole workspace
+      const requests = fileIds.length > 0
+        ? fileIds.map((fid) =>
+            fetch("/api/rag/retrieve", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                workspaceId: selectedWorkspaceId,
+                query: ragQuery,
+                topK: 5,
+                fileId: fid,
+              }),
+            }).then((r) => r.json())
+          )
+        : [
+            fetch("/api/rag/retrieve", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                workspaceId: selectedWorkspaceId,
+                query: ragQuery,
+                topK: 10,
+              }),
+            }).then((r) => r.json()),
+          ];
+
+      const results = await Promise.all(requests);
+      const allChunks = results.flatMap((r) =>
+        (r.matches ?? []).map((m: { text: string; source: string; fileId: string }) => ({
+          text: m.text,
+          source: m.source,
+          fileId: m.fileId,
+        }))
+      );
+      setRagChunks(allChunks);
+    } catch (err) {
+      console.error(err);
+      setRagError("Failed to retrieve content. Check that Pinecone is configured.");
+    } finally {
+      setRagRetrieving(false);
+    }
+  }
+
+  // Generate quiz from RAG-retrieved content
+  async function handleGenerateFromRag() {
+    if (!user || ragChunks.length === 0) return;
+
+    const types: string[] = [];
+    if (includeMultipleChoice) types.push("multiple-choice");
+    if (includeTrueFalse) types.push("true-false");
+    if (includeWritten) types.push("written");
+    if (includeMatching) types.push("matching");
+
+    if (types.length === 0) {
+      alert("Please select at least one question type");
+      return;
+    }
+
+    setGenerating(true);
+    setGeneratingStatus("Creating quiz from workspace files...");
+    setShowQuizModal(false);
+
+    try {
+      const combinedText = ragChunks.map((c) => c.text).join("\n\n");
+      const title = ragQuery.substring(0, 50).trim() + (ragQuery.length > 50 ? "..." : "");
+
+      const quiz = await createQuiz(user.uid, title, `Generated from workspace files: ${ragQuery}`);
+
+      setGeneratingStatus("Generating questions...");
+      const questions = await generateQuestionsFromText(combinedText, questionCount, types);
+
+      setGeneratingStatus("Saving...");
+      await updateQuiz(quiz.id, { questions });
+
+      router.push(`/workspace/quiz-builder/${quiz.id}`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate. Please try again.");
+      setGenerating(false);
+      setGeneratingStatus("");
+    }
+  }
 
   // Create empty quiz
   async function handleCreateEmptyQuiz() {
@@ -175,6 +301,11 @@ export default function StudyToolsPage() {
     setNewTitle("");
     setNewDesc("");
     setPasteText("");
+    setSelectedWorkspaceId(null);
+    setSelectedFileIds(new Set());
+    setRagQuery("");
+    setRagChunks([]);
+    setRagError("");
     setShowQuizModal(true);
   }
 
@@ -184,6 +315,11 @@ export default function StudyToolsPage() {
     setNewTitle("");
     setNewDesc("");
     setPasteText("");
+    setSelectedWorkspaceId(null);
+    setSelectedFileIds(new Set());
+    setRagQuery("");
+    setRagChunks([]);
+    setRagError("");
   }
 
   if (authLoading || isLoading) {
@@ -366,6 +502,7 @@ export default function StudyToolsPage() {
                 {quizCreateMode === "select" && "Create Quiz"}
                 {quizCreateMode === "paste" && "Paste Text"}
                 {quizCreateMode === "empty" && "New Quiz"}
+                {quizCreateMode === "workspace" && "From Workspace Files"}
               </h2>
               <button onClick={closeQuizModal} className="p-1 hover:bg-muted rounded">
                 <X size={20} />
@@ -389,17 +526,15 @@ export default function StudyToolsPage() {
                 </button>
 
                 <button
-                  disabled
-                  className="w-full flex items-center gap-4 p-4 border border-border rounded-xl opacity-50 cursor-not-allowed text-left"
+                  onClick={() => setQuizCreateMode("workspace")}
+                  className="w-full flex items-center gap-4 p-4 border border-border rounded-xl hover:bg-muted text-left"
                 >
                   <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-                    <Upload size={20} className="text-muted-foreground" />
+                    <FolderOpen size={20} className="text-muted-foreground" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">Upload File</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Generate from PDF or image</p>
+                  <div>
+                    <p className="font-medium">From Workspace Files</p>
+                    <p className="text-sm text-muted-foreground">Generate from your indexed documents</p>
                   </div>
                 </button>
 
@@ -516,7 +651,7 @@ export default function StudyToolsPage() {
                   className="w-full bg-background border border-border rounded-lg px-4 py-3 mb-3 text-sm"
                   autoFocus
                 />
-                
+
                 <textarea
                   placeholder="Description (optional)"
                   value={newDesc}
@@ -524,7 +659,7 @@ export default function StudyToolsPage() {
                   className="w-full bg-background border border-border rounded-lg px-4 py-3 mb-4 resize-none text-sm"
                   rows={3}
                 />
-                
+
                 <div className="flex gap-3">
                   <button
                     onClick={closeQuizModal}
@@ -540,6 +675,205 @@ export default function StudyToolsPage() {
                     {creating ? "Creating..." : "Create"}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Workspace Files Mode */}
+            {quizCreateMode === "workspace" && (
+              <div>
+                <button
+                  onClick={() => setQuizCreateMode("select")}
+                  className="text-sm text-muted-foreground hover:text-foreground mb-4"
+                >
+                  ← Back
+                </button>
+
+                {/* Step 1: Select workspace */}
+                <label className="text-sm font-medium mb-2 block">Workspace</label>
+                <select
+                  value={selectedWorkspaceId ?? ""}
+                  onChange={(e) => {
+                    setSelectedWorkspaceId(e.target.value || null);
+                    setSelectedFileIds(new Set());
+                    setRagChunks([]);
+                    setRagError("");
+                  }}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-3 text-sm mb-4"
+                >
+                  <option value="">Select a workspace...</option>
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.title}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Step 2: Show indexed files */}
+                {selectedWorkspaceId && (
+                  <>
+                    <label className="text-sm font-medium mb-2 block">
+                      Indexed Files
+                      {indexedFiles.length === 0 && workspaceFiles.length > 0 && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (no files indexed yet — upload and wait for processing)
+                        </span>
+                      )}
+                    </label>
+
+                    {indexedFiles.length > 0 ? (
+                      <div className="space-y-1 mb-4 max-h-40 overflow-y-auto">
+                        {indexedFiles.map((file) => (
+                          <label
+                            key={file.id}
+                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted cursor-pointer text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedFileIds.has(file.id)}
+                              onChange={(e) => {
+                                setSelectedFileIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(file.id);
+                                  else next.delete(file.id);
+                                  return next;
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            <FileText size={14} className="text-muted-foreground shrink-0" />
+                            <span className="truncate flex-1">{file.originalName}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {file.vectorCount ?? 0} vectors
+                            </span>
+                          </label>
+                        ))}
+                        <p className="text-xs text-muted-foreground px-2 pt-1">
+                          Leave unchecked to search all files
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg mb-4 text-sm text-muted-foreground">
+                        <AlertCircle size={14} />
+                        {workspaceFiles.length === 0
+                          ? "No files in this workspace. Upload PDFs first."
+                          : "Files are still processing. Wait for indexing to complete."}
+                      </div>
+                    )}
+
+                    {/* Step 3: Topic query */}
+                    <label className="text-sm font-medium mb-2 block">Topic / Query</label>
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={ragQuery}
+                        onChange={(e) => setRagQuery(e.target.value)}
+                        placeholder="e.g. Photosynthesis, Chapter 3 concepts..."
+                        className="flex-1 bg-background border border-border rounded-lg px-4 py-2.5 text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleRagRetrieve();
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={handleRagRetrieve}
+                        disabled={!ragQuery.trim() || ragRetrieving || indexedFiles.length === 0}
+                        className="px-4 py-2.5 bg-foreground text-background rounded-lg text-sm disabled:opacity-50 flex items-center gap-2 shrink-0"
+                      >
+                        {ragRetrieving ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Search size={14} />
+                        )}
+                        Retrieve
+                      </button>
+                    </div>
+
+                    {ragError && (
+                      <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg mb-4 text-sm text-red-600 dark:text-red-400">
+                        <AlertCircle size={14} />
+                        {ragError}
+                      </div>
+                    )}
+
+                    {/* Step 4: Show retrieved chunks + generate */}
+                    {ragChunks.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle2 size={14} className="text-green-600" />
+                          <span className="text-sm font-medium">
+                            Retrieved {ragChunks.length} relevant passages
+                          </span>
+                        </div>
+
+                        <div className="max-h-32 overflow-y-auto bg-muted/30 rounded-lg p-3 mb-4 space-y-2">
+                          {ragChunks.slice(0, 3).map((chunk, i) => (
+                            <p key={i} className="text-xs text-muted-foreground line-clamp-2">
+                              {chunk.text}
+                            </p>
+                          ))}
+                          {ragChunks.length > 3 && (
+                            <p className="text-xs text-muted-foreground/60">
+                              +{ragChunks.length - 3} more passages
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+                          <p className="text-sm font-medium mb-3">Question Types</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" checked={includeMultipleChoice} onChange={(e) => setIncludeMultipleChoice(e.target.checked)} />
+                              Multiple Choice
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" checked={includeTrueFalse} onChange={(e) => setIncludeTrueFalse(e.target.checked)} />
+                              True / False
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" checked={includeWritten} onChange={(e) => setIncludeWritten(e.target.checked)} />
+                              Written
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" checked={includeMatching} onChange={(e) => setIncludeMatching(e.target.checked)} />
+                              Matching
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-3 mt-3">
+                            <span className="text-sm">Questions:</span>
+                            <select
+                              value={questionCount}
+                              onChange={(e) => setQuestionCount(Number(e.target.value))}
+                              className="bg-background border border-border rounded px-2 py-1 text-sm"
+                            >
+                              <option value={5}>5</option>
+                              <option value={10}>10</option>
+                              <option value={15}>15</option>
+                              <option value={20}>20</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                          <button
+                            onClick={closeQuizModal}
+                            className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm hover:bg-muted"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleGenerateFromRag}
+                            className="flex-1 px-4 py-2.5 bg-foreground text-background rounded-lg text-sm flex items-center justify-center gap-2"
+                          >
+                            <Sparkles size={16} />
+                            Generate Quiz
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

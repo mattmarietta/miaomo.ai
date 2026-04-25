@@ -3,8 +3,8 @@ import { object, string, z } from "zod"
 import { messageSchema, userMessageSchema } from "@/lib/firebase/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { serverAuth } from "@/lib/firebase/firebaseServer";
-import { getChatById, getWorkspaceById, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById, updateWorkspaceTitleById } from "@/lib/firebase/server-queries";
-import { aiAgent, generateTitleFromUserMessage } from "@/app/api/chat/ai";
+import { getChatById, getWorkspaceById, getWorkspaceFiles, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById, updateWorkspaceTitleById } from "@/lib/firebase/server-queries";
+import { aiAgent, generateTitleFromUserMessage, setAgentUserId, setAgentWorkspaceId, setAgentFiles } from "@/app/api/chat/ai";
 import { createVertex } from "@ai-sdk/google-vertex/edge";
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 // Allow streaming responses up to 30 seconds
@@ -96,6 +96,10 @@ export async function POST(req: Request) {
         const stream = createUIMessageStream({
             execute: async ({ writer }) => {
 
+                setAgentUserId(auth.userId);
+                setAgentWorkspaceId(workspaceId);
+                const files = await getWorkspaceFiles({ workspaceId });
+                setAgentFiles(files);
                 const result = await aiAgent.stream({
                     messages: modelMessages,
                 })
@@ -126,9 +130,12 @@ export async function POST(req: Request) {
         return createUIMessageStreamResponse({ stream, })
 
     } catch (err) {
-
+        console.error("Chat route error:", err);
+        return NextResponse.json(
+            { error: err instanceof Error ? err.message : "Internal server error" },
+            { status: 500 },
+        );
     }
-    return;
 
 
 }
