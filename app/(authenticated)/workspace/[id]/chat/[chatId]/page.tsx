@@ -7,8 +7,7 @@ import { Chat } from "@/components/chat/Chat";
 import { ChatAgent } from "@/app/api/chat/ai";
 import { subscribeWorkspaceFiles } from "@/lib/firebase/client-queries";
 import { DBWorkspaceFileSchema } from "@/lib/firebase/schema";
-import { X, FileText } from "lucide-react";
-import Link from "next/link";
+import { PdfViewer } from "@/components/PdfViewer";
 import {
   Dialog,
   DialogContent,
@@ -70,9 +69,9 @@ export default function WorkspaceChatPage() {
         });
 
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as { messages: ChatAgent[] };
           // Convert DB messages to ChatAgent format
-          const messages: ChatAgent[] = data.messages.map((msg: any) => ({
+          const messages: ChatAgent[] = data.messages.map((msg) => ({
             id: msg.id,
             role: msg.role,
             parts: msg.parts,
@@ -93,7 +92,7 @@ export default function WorkspaceChatPage() {
     return files.find((f) => f.id === selectedFileId) || null;
   }, [selectedFileId, files]);
 
-  const selectedFileUrl = selectedFile ? (selectedFile as any).downloadUrl : null;
+  const selectedFileUrl = selectedFile?.downloadUrl ?? null;
 
   const handleGenerateSummary = () => {
     if (!summaryDialogFile || !summaryDialogFile.fullText) return;
@@ -118,9 +117,15 @@ export default function WorkspaceChatPage() {
   if (!user) return null;
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* Chat — center */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Chat — left */}
+      <div
+        className={
+          selectedFile && selectedFileUrl
+            ? "w-[34rem] min-w-[22rem] max-w-[42%] shrink-0 flex flex-col min-h-0 border-r border-border"
+            : "flex-1 min-w-0 flex flex-col min-h-0"
+        }
+      >
         <Chat
           key={chatId}
           user={user}
@@ -137,45 +142,18 @@ export default function WorkspaceChatPage() {
         />
       </div>
 
-      {/* PDF Viewer — right panel */}
+      {/* PDF Viewer — centered PDF with tools on the right */}
       {selectedFile && selectedFileUrl && (
-        <div className="w-[45%] max-w-2xl border-l border-border flex flex-col min-h-0 bg-muted/30">
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <span className="text-xs font-medium truncate">
-                {selectedFile.originalName || "Document"}
-              </span>
-            </div>
-            <Link
-              href={`/workspace/${id}/chat/${chatId}`}
-              className="p-1 rounded-md hover:bg-muted transition-colors"
-            >
-              <X className="size-4 text-muted-foreground" />
-            </Link>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-h-0">
-            {selectedFileUrl ? (
-              // Display PDF using iframe
-              <iframe
-                src={selectedFileUrl}
-                className="w-full h-full border-0"
-                title={selectedFile.originalName || "Document viewer"}
-              />
-            ) : (
-              // Fallback for when no file is selected
-              <div className="p-8 bg-white text-black min-h-full">
-                <div className="max-w-4xl mx-auto">
-                  <div className="text-muted-foreground text-center py-8">
-                    Select a file to view its content
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <PdfViewer
+            fileUrl={selectedFileUrl}
+            fileName={selectedFile.originalName || "Document"}
+            fileId={selectedFile.id}
+            workspaceId={id}
+            userId={user.uid}
+            onClose={() => router.push(`/workspace/${id}/chat/${chatId}`)}
+            onSendToChat={(text) => setExternalMessage(text)}
+          />
         </div>
       )}
 
@@ -185,7 +163,7 @@ export default function WorkspaceChatPage() {
           <DialogHeader>
             <DialogTitle>Text Processing Complete</DialogTitle>
             <DialogDescription>
-              Text processing has finished for "{summaryDialogFile?.originalName}".
+              Text processing has finished for &quot;{summaryDialogFile?.originalName}&quot;.
               Would you like to generate an initial summary of this document?
             </DialogDescription>
           </DialogHeader>
