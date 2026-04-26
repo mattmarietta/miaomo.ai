@@ -19,13 +19,16 @@ import {
   ArrowLeft,
   Plus,
   Paperclip,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile, generateWorkspaceFileId } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, updateWorkspaceFileStatus } from "@/lib/firebase/client-queries";
 
 export const AppSidebarWorkspaceView = ({
   workspaceId,
@@ -36,7 +39,6 @@ export const AppSidebarWorkspaceView = ({
   const [chats, setChats] = useState<DBChatSchema[]>([]);
   const { user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -55,8 +57,7 @@ export const AppSidebarWorkspaceView = ({
     if (!file || !user) return;
 
     setUploading(true);
-    const fileId = generateWorkspaceFileId(workspaceId);
-    const storagePath = `workspaces/${workspaceId}/files/${fileId}/${file.name}`;
+    const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -70,14 +71,63 @@ export const AppSidebarWorkspaceView = ({
       async () => {
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
-          await addWorkspaceFile(workspaceId, {
+          const fileId = await addWorkspaceFile(workspaceId, {
             originalName: file.name,
             mimeType: file.type || "application/octet-stream",
             size: file.size,
             storagePath,
             downloadUrl: url,
             ownerUid: user.uid,
-          }, fileId);
+          });
+
+          // Check if file type supports OCR
+          const ocrSupportedTypes = [
+            "application/pdf",
+            "image/tiff",
+            "image/tif",
+            "image/gif",
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/bmp",
+            "image/webp",
+          ];
+
+          if (ocrSupportedTypes.includes(file.type.toLowerCase())) {
+            // Trigger OCR processing
+            try {
+              await updateWorkspaceFileStatus(workspaceId, fileId, "processing_ocr");
+              
+              const ocrResponse = await fetch("/api/ocr/url", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  url,
+                  mimeType: file.type,
+                }),
+              });
+
+              if (ocrResponse.ok) {
+                const ocrResult = await ocrResponse.json();
+                // Store the extracted text and update status
+                await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_completed", {
+                  fullText: ocrResult.fullText,
+                });
+              } else {
+                const errorData = await ocrResponse.json();
+                await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_failed", {
+                  errorMessage: errorData.error || "OCR processing failed",
+                });
+              }
+            } catch (ocrError) {
+              console.error("OCR processing error:", ocrError);
+              await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_failed", {
+                errorMessage: ocrError instanceof Error ? ocrError.message : "Unknown OCR error",
+              });
+            }
+          }
         } catch (err) {
           console.error(err);
         } finally {
@@ -134,14 +184,30 @@ export const AppSidebarWorkspaceView = ({
                   ? `/workspace/${workspaceId}?file=${encodeURIComponent(file.id)}`
                   : `/workspace/${workspaceId}`;
 
+              const getStatusIcon = () => {
+                switch (file.status) {
+                  case "processing_ocr":
+                    return <Loader2 className="size-3.5 shrink-0 text-blue-500 animate-spin ml-2" />;
+                  case "ocr_completed":
+                    return <CheckCircle className="size-3.5 shrink-0 text-green-500 ml-2" />;
+                  case "ocr_failed":
+                    return <XCircle className="size-3.5 shrink-0 text-red-500 ml-2" />;
+                  default:
+                    return null;
+                }
+              };
+
               return (
                 <SidebarMenuItem key={file.id}>
                   <SidebarMenuButton asChild className="gap-2" size="sm">
-                    <Link href={href}>
-                      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate text-sm">
-                        {file.originalName || "Untitled"}
-                      </span>
+                    <Link href={href} className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm">
+                          {file.originalName || "Untitled"}
+                        </span>
+                      </div>
+                      {getStatusIcon()}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -174,15 +240,15 @@ export const AppSidebarWorkspaceView = ({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
+                asChild
                 className="gap-2"
                 size="sm"
-                onClick={() => {
-                  const newChatId = crypto.randomUUID();
-                  router.push(`/workspace/${workspaceId}/chat/${newChatId}`);
-                }}
+                isActive={pathname === `/workspace/${workspaceId}` && !pathname.includes('/chat/')}
               >
-                <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm font-medium">New Chat</span>
+                <Link href={`/workspace/${workspaceId}`}>
+                  <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-sm font-medium">New Chat</span>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             {chats.map((chat) => (

@@ -48,9 +48,12 @@ interface ChatProps {
     workspaceId?: string;
     files?: DBWorkspaceFileSchema[];
     onFileClick?: (file: DBWorkspaceFileSchema) => void;
+    externalMessage?: string;
+    onExternalMessageSent?: () => void;
+    hideExternalMessage?: boolean;
 }
 
-export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick }: ChatProps) {
+export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
     const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         id: chatId,
@@ -67,6 +70,7 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
     const [uploadProgress, setUploadProgress] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [lastMessageWasExternal, setLastMessageWasExternal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // @-mention state
@@ -102,6 +106,25 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
     useEffect(() => {
         setMentionIndex(0);
     }, [filteredFiles.length]);
+
+    // Handle external message
+    useEffect(() => {
+        if (externalMessage) {
+            user.getIdToken().then(idToken => {
+                sendMessage({ text: externalMessage }, {
+                    headers: {
+                        "Authorization": `Bearer ${idToken}`
+                    },
+                    body: {
+                        attachedFiles: [],
+                        model: selectedModel,
+                    },
+                });
+                setLastMessageWasExternal(true);
+                onExternalMessageSent?.();
+            });
+        }
+    }, [externalMessage, sendMessage, selectedModel, onExternalMessageSent, user]);
 
     const insertMention = useCallback((file: DBWorkspaceFileSchema) => {
         if (mentionStartPos === null) return;
@@ -204,6 +227,7 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
             });
             setInput("");
             setAttachedFiles([]);
+            setLastMessageWasExternal(false); // Reset flag when user sends manual message
         }
     };
 
@@ -477,14 +501,12 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                         switch (part.type) {
                                             case "text": {
                                                 const rawText = (part as TextPart).text || "";
-                                                // Extract [Referencing file: ...] lines from user messages
                                                 const fileRefPattern = /\[Referencing file: (.+?)\]/g;
                                                 const referencedFiles: string[] = [];
                                                 let match;
                                                 while ((match = fileRefPattern.exec(rawText)) !== null) {
                                                     referencedFiles.push(match[1]);
                                                 }
-                                                // Strip the file reference lines from displayed text
                                                 const displayText = rawText
                                                     .replace(/\[Referencing file: .+?\]\n*/g, "")
                                                     .trim();

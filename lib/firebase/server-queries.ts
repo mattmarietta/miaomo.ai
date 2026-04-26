@@ -2,10 +2,30 @@
 import { serverDB } from "@/lib/firebase/firebaseServer";
 import { DBChatSchema, DBMessageSchema } from "@/lib/firebase/schema";
 
-const messagesCollection = serverDB.collection("messages")
+const messagesCollection = serverDB.collection("messages");
 
 function getChatsCollection(workspaceId: string) {
-  return serverDB.collection("workspaces").doc(workspaceId).collection("chats")
+  return serverDB.collection("workspaces").doc(workspaceId).collection("chats");
+}
+
+export async function saveMessage({ chatId, userId, role, parts, metadata, attachments }: DBMessageSchema) {
+  try {
+    const messageRef = messagesCollection.doc()
+    await messageRef.set({
+      id: messageRef.id,
+      chatId,
+      userId,
+      role,
+      parts,
+      metadata,
+      attachments,
+      createdAt: new Date(),
+    })
+    return { success: true, data: { id: messageRef.id } }
+  } catch (err) {
+    console.error('Error saving message:', err);
+    return { success: false, error: 'Failed to save message' };
+  }
 }
 
 export async function saveChat({ id, userId, title, workspaceId }: Pick<DBChatSchema, "id" | "userId" | "title"> & { workspaceId: string }) {
@@ -24,24 +44,26 @@ export async function saveChat({ id, userId, title, workspaceId }: Pick<DBChatSc
     return { success: false, error: 'Failed to save chat' };
   }
 }
-export async function saveMessage({ chatId, parts, role, userId, metadata, attachments }: DBMessageSchema) {
+export async function getChatMessages({ chatId }: { chatId: string }) {
   try {
-    const result = await messagesCollection.add({
-      chatId,
-      userId,
-      role,
-      parts,
-      metadata: [],
-      attachments: [],
-      createdAt: new Date(),
+    const messagesSnapshot = await messagesCollection.where("chatId", "==", chatId).get()
+
+    const messages = messagesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+    }))
+    messages.sort((a: any, b: any) => {
+      const aTime = a.createdAt?.getTime?.() ?? 0;
+      const bTime = b.createdAt?.getTime?.() ?? 0;
+      return aTime - bTime;
     })
-    console.log(result)
+
+    return { success: true, data: messages }
   } catch (err) {
-    console.error('Error saving chat:', err);
-    return { success: false, error: 'Failed to save chat' };
+    console.error('Error getting chat messages:', err);
+    return { success: false, error: 'Failed to fetch chat messages' };
   }
-
-
 }
 export async function getChatById({ id, workspaceId }: { id: string, workspaceId: string }) {
   try {

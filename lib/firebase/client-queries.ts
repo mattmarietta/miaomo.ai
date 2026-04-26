@@ -113,6 +113,20 @@ export function subscribeWorkspaceFiles(
     );
 }
 
+export async function updateWorkspaceFileStatus(
+    workspaceId: string,
+    fileId: string,
+    status: string,
+    additionalData?: Partial<DBWorkspaceFileSchema>
+) {
+    const fileDoc = doc(db, "workspaces", workspaceId, "files", fileId);
+    await setDoc(fileDoc, {
+        status,
+        updatedAt: Timestamp.now(),
+        ...additionalData,
+    }, { merge: true });
+}
+
 export function subscribeWorkspaceChats(
     workspaceId: string,
     userId: string,

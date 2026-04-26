@@ -7,8 +7,9 @@ export const maxDuration = 60;
 function getDocAiClient() {
     const location = process.env.DOC_AI_LOCATION!;
     const apiEndpoint = `${location}-documentai.googleapis.com`;
+    const key = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS!);
 
-    return new DocumentProcessorServiceClient({ apiEndpoint });
+    return new DocumentProcessorServiceClient({ apiEndpoint, credentials: key });
 }
 
 export async function POST(req: Request) {
@@ -84,8 +85,14 @@ export async function POST(req: Request) {
                 }) ?? [],
             })) ?? [];
 
-        console.log("OCR result:", { fullText, pages });
-        return NextResponse.json({ fullText, pages });
+        // Clean up the extracted text
+        const cleanedText = fullText
+            .replace(/\n\s*\n/g, '\n\n') // Normalize multiple line breaks
+            .replace(/[ \t]+/g, ' ') // Normalize multiple spaces/tabs
+            .trim();
+
+        console.log("OCR result:", { fullText: cleanedText, pages });
+        return NextResponse.json({ fullText: cleanedText, pages });
     }catch (e: any) {
         console.error(e);
         return NextResponse.json(
