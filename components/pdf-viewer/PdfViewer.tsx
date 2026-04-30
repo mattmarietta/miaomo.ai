@@ -19,12 +19,16 @@ export function PdfViewer({
   userId,
   onClose,
   onSendToChat,
+  initialPage,
+  highlightText,
 }: PdfViewerProps) {
   const viewer = usePdfViewerState({
     fileId,
     workspaceId,
     userId,
     onSendToChat,
+    initialPage,
+    highlightText,
   });
   const canAskAi = Boolean(onSendToChat);
 

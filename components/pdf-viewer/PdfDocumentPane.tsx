@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { Document, Page } from "react-pdf";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export function PdfDocumentPane({
   viewer,
 }: PdfDocumentPaneProps) {
   const {
+    citationHighlight,
     containerRef,
     containerWidth,
     currentPage,
@@ -35,6 +37,23 @@ export function PdfDocumentPane({
     scrollContainerRef,
     sendHighlightToChat,
   } = viewer;
+
+  const customTextRenderer = useCallback(
+    (textItem: { str: string; itemIndex: number }) => {
+      if (!citationHighlight) return textItem.str;
+      const normHighlight = citationHighlight.replace(/\s+/g, " ").trim().toLowerCase();
+      const normStr = textItem.str.toLowerCase();
+      if (normHighlight.length < 10) return textItem.str;
+      // Check if this text item overlaps with the highlight
+      const idx = normHighlight.indexOf(normStr);
+      const idx2 = normStr.indexOf(normHighlight.slice(0, Math.min(40, normHighlight.length)));
+      if (idx >= 0 || idx2 >= 0) {
+        return `<mark style="background:oklch(0.85 0.15 163 / 0.4);color:transparent;border-radius:2px;padding:0 1px;">${textItem.str}</mark>`;
+      }
+      return textItem.str;
+    },
+    [citationHighlight],
+  );
 
   return (
     <div
@@ -99,6 +118,7 @@ export function PdfDocumentPane({
               width={Math.max(containerWidth - 96, 320)}
               scale={scale}
               onRenderSuccess={onPageRenderSuccess}
+              customTextRenderer={citationHighlight ? customTextRenderer : undefined}
             />
           </Document>
 

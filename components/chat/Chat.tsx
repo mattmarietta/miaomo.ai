@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Check, ChevronDown, Paperclip, Loader2, FileText, X, BookOpen, Search } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Paperclip, Loader2, FileText, X, BookOpen, Search, Globe, GraduationCap, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -15,15 +15,16 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
 import { addWorkspaceFile, generateWorkspaceFileId } from "@/lib/firebase/client-queries";
 import { DBWorkspaceFileSchema } from "@/lib/firebase/schema";
+import { createQuiz, updateQuiz, generateId as generateQuizId, type Question } from "@/lib/firebase/quizStore";
+import { createDeck, updateDeck, createNewCard } from "@/lib/firebase/flashcardStore";
 
-interface ToolInvocationPart {
-    type: "tool-invocation";
-    toolInvocation: {
-        toolName: string;
-        state: "call" | "result" | "partial-call";
-        args?: Record<string, unknown>;
-        result?: unknown;
-    };
+interface ToolPart {
+    type: string;
+    toolCallId: string;
+    state: "input-streaming" | "input-available" | "output-available" | "error";
+    input?: Record<string, unknown>;
+    output?: unknown;
+    errorText?: string;
 }
 
 interface TextPart {
@@ -31,7 +32,7 @@ interface TextPart {
     text?: string;
 }
 
-type MessagePart = TextPart | ToolInvocationPart | { type: string };
+type MessagePart = TextPart | ToolPart | { type: string };
 
 interface Message {
     id: string;
@@ -41,6 +42,15 @@ interface Message {
 
 const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
 
+export interface Citation {
+    fileId: string;
+    fileName: string;
+    page?: number;
+    chunkIndex: number;
+    text: string;
+    score: number;
+}
+
 interface ChatProps {
     user: User;
     initialMessages: ChatAgent[];
@@ -48,19 +58,22 @@ interface ChatProps {
     workspaceId?: string;
     files?: DBWorkspaceFileSchema[];
     onFileClick?: (file: DBWorkspaceFileSchema) => void;
+    onCitationClick?: (citation: Citation) => void;
     externalMessage?: string;
     onExternalMessageSent?: () => void;
     hideExternalMessage?: boolean;
 }
 
-export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
+export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, onCitationClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
     const router = useRouter();
+    const [webSearchMode, setWebSearchMode] = useState(false);
+    const transport = useMemo(() => new DefaultChatTransport({
+        api: "/api/chat",
+        body: workspaceId ? { workspaceId, webSearchMode } : undefined,
+    }), [workspaceId, webSearchMode]);
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         id: chatId,
-        transport: new DefaultChatTransport({
-            api: "/api/chat",
-            body: workspaceId ? { workspaceId } : undefined,
-        }),
+        transport,
         messages: initialMessages,
     });
     const [input, setInput] = useState("");
@@ -278,6 +291,23 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
     const renderInputBar = (extraClass?: string) => (
         <div className={`w-full px-4 pb-6 flex flex-col items-center ${extraClass || ""}`}>
             <form onSubmit={handleSubmit} className="w-full max-w-3xl">
+                {/* Web search mode indicator */}
+                {webSearchMode && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-xs font-medium">
+                            <Globe className="size-3" />
+                            Web search enabled
+                            <button
+                                type="button"
+                                onClick={() => setWebSearchMode(false)}
+                                className="ml-0.5 p-0.5 rounded hover:bg-blue-500/20"
+                            >
+                                <X className="size-3" />
+                            </button>
+                        </span>
+                    </div>
+                )}
+
                 {/* Attached files chips */}
                 {attachedFiles.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
@@ -375,6 +405,21 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                     )}
                                 </Button>
                             )}
+
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className={`h-7 w-7 rounded-full transition-colors ${
+                                    webSearchMode
+                                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                                onClick={() => setWebSearchMode((prev) => !prev)}
+                                title={webSearchMode ? "Web search enabled" : "Enable web search"}
+                            >
+                                <Globe size={14} />
+                            </Button>
 
                             <Popover open={modelOpen} onOpenChange={setModelOpen}>
                                 <PopoverTrigger asChild>
@@ -552,20 +597,19 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                                     </Markdown>
                                                 );
                                             }
-                                            case "tool-invocation": {
-                                                const { toolInvocation } = part as ToolInvocationPart;
-                                                if (toolInvocation.toolName === "searchDocuments") {
-                                                    const rawQuery = toolInvocation.args?.query ?? toolInvocation.args?.queries;
-                                                    const query = Array.isArray(rawQuery) ? rawQuery[0] : rawQuery;
-                                                    const isDone = toolInvocation.state === "result";
-                                                    const results = isDone ? ((toolInvocation.result as any)?.results ?? []) : [];
-                                                    const resultCount = results.length;
-                                                    const sourceFiles: string[] = isDone
-                                                        ? [...new Set(results.map((r: any) => r.fileName).filter(Boolean))] as string[]
-                                                        : [];
-                                                    return (
+                                            case "tool-searchDocuments": {
+                                                const tp = part as ToolPart;
+                                                const rawQuery = tp.input?.query ?? tp.input?.queries;
+                                                const query = Array.isArray(rawQuery) ? rawQuery[0] : rawQuery;
+                                                const isDone = tp.state === "output-available";
+                                                const results = isDone ? ((tp.output as any)?.results ?? []) : [];
+                                                const resultCount = results.length;
+                                                const sourceFiles: string[] = isDone
+                                                    ? [...new Set(results.map((r: any) => r.fileName).filter(Boolean))] as string[]
+                                                    : [];
+                                                return (
+                                                    <div key={`${message.id}-${i}`}>
                                                         <div
-                                                            key={`${message.id}-${i}`}
                                                             className={`flex items-start gap-2.5 py-2.5 px-3.5 my-2 rounded-xl text-xs transition-colors ${
                                                                 isDone
                                                                     ? "bg-emerald-500/5 border border-emerald-500/15 text-muted-foreground"
@@ -601,9 +645,239 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    );
-                                                }
-                                                return null;
+                                                        {/* Citation cards */}
+                                                        {isDone && results.length > 0 && (
+                                                            <div className="flex gap-2 overflow-x-auto py-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
+                                                                {results.map((r: any, ri: number) => (
+                                                                    <button
+                                                                        key={`${r.fileId}-${r.chunkIndex}-${ri}`}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const citation = {
+                                                                                fileId: r.fileId,
+                                                                                fileName: decodeURIComponent(r.fileName || "unknown"),
+                                                                                page: r.page,
+                                                                                chunkIndex: r.chunkIndex,
+                                                                                text: r.text,
+                                                                                score: r.score,
+                                                                            };
+                                                                            if (onCitationClick) {
+                                                                                onCitationClick(citation);
+                                                                            } else if (onFileClick) {
+                                                                                const file = files.find(f => f.id === r.fileId);
+                                                                                if (file) onFileClick(file);
+                                                                            }
+                                                                        }}
+                                                                        className="flex-shrink-0 flex flex-col gap-1 rounded-lg border border-border bg-card p-2.5 text-left text-xs hover:bg-muted/50 transition-colors max-w-[200px] cursor-pointer"
+                                                                    >
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <FileText size={10} className="text-primary shrink-0" />
+                                                                            <span className="font-medium text-foreground truncate">
+                                                                                {decodeURIComponent(r.fileName || "unknown")}
+                                                                            </span>
+                                                                        </div>
+                                                                        {r.page != null && (
+                                                                            <span className="inline-flex items-center rounded bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium w-fit">
+                                                                                Page {r.page}
+                                                                            </span>
+                                                                        )}
+                                                                        <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                                                            {(r.text || "").slice(0, 100)}...
+                                                                        </p>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+                                            case "tool-webSearch": {
+                                                const tp = part as ToolPart;
+                                                const rawQuery = tp.input?.query ?? tp.input?.queries;
+                                                const query = Array.isArray(rawQuery) ? rawQuery[0] : rawQuery;
+                                                const isDone = tp.state === "output-available";
+                                                return (
+                                                    <div
+                                                        key={`${message.id}-${i}`}
+                                                        className={`flex items-start gap-2.5 py-2.5 px-3.5 my-2 rounded-xl text-xs transition-colors ${
+                                                            isDone
+                                                                ? "bg-blue-500/5 border border-blue-500/15 text-muted-foreground"
+                                                                : "bg-muted/50 border border-border/50 text-muted-foreground"
+                                                        }`}
+                                                    >
+                                                        {isDone ? (
+                                                            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/10 mt-0.5 shrink-0">
+                                                                <Globe size={11} className="text-blue-600 dark:text-blue-400" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/10 mt-0.5 shrink-0">
+                                                                <Loader2 size={11} className="animate-spin text-blue-600 dark:text-blue-400" />
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <span className={isDone ? "text-blue-700 dark:text-blue-300 font-medium" : ""}>
+                                                                {isDone
+                                                                    ? "Web search complete"
+                                                                    : `Searching the web for "${query}"...`
+                                                                }
+                                                            </span>
+                                                            {isDone && <span className="text-muted-foreground"> for &ldquo;{query}&rdquo;</span>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            case "tool-createQuiz": {
+                                                const tp = part as ToolPart;
+                                                const isDone = tp.state === "output-available";
+                                                const result = isDone ? (tp.output as any) : null;
+                                                const success = result?.success;
+                                                return (
+                                                    <div
+                                                        key={`${message.id}-${i}`}
+                                                        className={`my-2 rounded-xl border text-sm transition-colors ${
+                                                            isDone && success
+                                                                ? "border-violet-500/20 bg-violet-500/5"
+                                                                : isDone
+                                                                    ? "border-destructive/20 bg-destructive/5"
+                                                                    : "border-border/50 bg-muted/50"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5 px-4 py-3">
+                                                            {isDone && success ? (
+                                                                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-500/10 shrink-0">
+                                                                    <GraduationCap size={16} className="text-violet-600 dark:text-violet-400" />
+                                                                </div>
+                                                            ) : !isDone ? (
+                                                                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted shrink-0">
+                                                                    <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                                                                </div>
+                                                            ) : null}
+                                                            <div className="min-w-0 flex-1">
+                                                                {isDone && success ? (
+                                                                    <>
+                                                                        <p className="font-medium text-violet-700 dark:text-violet-300">{result.title}</p>
+                                                                        <p className="text-xs text-muted-foreground mt-0.5">{result.questionCount} questions ready</p>
+                                                                    </>
+                                                                ) : isDone ? (
+                                                                    <p className="text-destructive text-xs">{result?.message || "Failed to create quiz"}</p>
+                                                                ) : (
+                                                                    <p className="text-muted-foreground">Generating quiz questions...</p>
+                                                                )}
+                                                            </div>
+                                                            {isDone && success && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="shrink-0 gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const quiz = await createQuiz(user.uid, result.title, result.description || "");
+                                                                            const questions: Question[] = result.questions.map((aq: any) => {
+                                                                                const q: Question = {
+                                                                                    id: generateQuizId(),
+                                                                                    type: aq.type,
+                                                                                    question: aq.question || "",
+                                                                                    correctAnswer: aq.correctAnswer || "",
+                                                                                    points: 1,
+                                                                                    box: 1,
+                                                                                };
+                                                                                if (aq.explanation) q.explanation = aq.explanation;
+                                                                                if (aq.type === "multiple-choice" && aq.options) {
+                                                                                    q.options = aq.options.map((text: string) => ({ id: generateQuizId(), text }));
+                                                                                    const correctIndex = aq.options.findIndex((opt: string) => opt === aq.correctAnswer);
+                                                                                    if (correctIndex >= 0 && q.options![correctIndex]) {
+                                                                                        q.correctAnswer = q.options![correctIndex].id;
+                                                                                    } else {
+                                                                                        const letterIndex = ["A", "B", "C", "D"].indexOf(aq.correctAnswer || "");
+                                                                                        if (letterIndex >= 0 && q.options![letterIndex]) {
+                                                                                            q.correctAnswer = q.options![letterIndex].id;
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                                if (aq.type === "matching" && aq.matchingPairs) {
+                                                                                    q.matchingPairs = aq.matchingPairs.map((p: any) => ({
+                                                                                        id: generateQuizId(),
+                                                                                        term: p.term,
+                                                                                        definition: p.definition,
+                                                                                    }));
+                                                                                    q.points = aq.matchingPairs.length;
+                                                                                }
+                                                                                return q;
+                                                                            });
+                                                                            await updateQuiz(quiz.id, { questions });
+                                                                            window.open(`/workspace-public/quiz-builder/${quiz.id}/take`, "_blank");
+                                                                        } catch (err) {
+                                                                            console.error("Failed to create quiz:", err);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <GraduationCap size={14} />
+                                                                    Take Quiz
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            case "tool-createFlashcards": {
+                                                const tp = part as ToolPart;
+                                                const isDone = tp.state === "output-available";
+                                                const result = isDone ? (tp.output as any) : null;
+                                                const success = result?.success;
+                                                return (
+                                                    <div
+                                                        key={`${message.id}-${i}`}
+                                                        className={`my-2 rounded-xl border text-sm transition-colors ${
+                                                            isDone && success
+                                                                ? "border-amber-500/20 bg-amber-500/5"
+                                                                : isDone
+                                                                    ? "border-destructive/20 bg-destructive/5"
+                                                                    : "border-border/50 bg-muted/50"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5 px-4 py-3">
+                                                            {isDone && success ? (
+                                                                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 shrink-0">
+                                                                    <Layers size={16} className="text-amber-600 dark:text-amber-400" />
+                                                                </div>
+                                                            ) : !isDone ? (
+                                                                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted shrink-0">
+                                                                    <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                                                                </div>
+                                                            ) : null}
+                                                            <div className="min-w-0 flex-1">
+                                                                {isDone && success ? (
+                                                                    <>
+                                                                        <p className="font-medium text-amber-700 dark:text-amber-300">{result.title}</p>
+                                                                        <p className="text-xs text-muted-foreground mt-0.5">{result.cardCount} cards ready</p>
+                                                                    </>
+                                                                ) : isDone ? (
+                                                                    <p className="text-destructive text-xs">{result?.message || "Failed to create flashcards"}</p>
+                                                                ) : (
+                                                                    <p className="text-muted-foreground">Generating flashcards...</p>
+                                                                )}
+                                                            </div>
+                                                            {isDone && success && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="shrink-0 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const deck = await createDeck(user.uid, result.title, result.description || "");
+                                                                            const cards = result.cards.map((c: any) => createNewCard(c.front, c.back));
+                                                                            await updateDeck(deck.id, { cards });
+                                                                            window.open(`/workspace-public/quiz-builder/flashcards/${deck.id}/study`, "_blank");
+                                                                        } catch (err) {
+                                                                            console.error("Failed to create flashcard deck:", err);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Layers size={14} />
+                                                                    Study Cards
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
                                             }
                                             default:
                                                 return null;

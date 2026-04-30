@@ -27,6 +27,31 @@ export function getWorkspaceIndex(workspaceId: string) {
     return pc.index<ChunkMeta>(indexName).namespace(workspaceId);
 }
 
+export async function upsertChunks(params: {
+  userId: string;
+  docId: string;
+  vectors: number[][];
+  chunks: { chunkText: string; chunkIndex: number; source: string; page?: number }[];
+}) {
+  const { userId, docId, vectors, chunks } = params;
+  const index = getWorkspaceIndex(userId);
+
+  const records = chunks.map((chunk, i) => ({
+    id: `${docId}-chunk-${chunk.chunkIndex}`,
+    values: vectors[i],
+    metadata: {
+      fileId: docId,
+      chunkIndex: chunk.chunkIndex,
+      source: chunk.source,
+      chunkText: chunk.chunkText,
+      ...(chunk.page !== undefined ? { page: chunk.page } : {}),
+    } satisfies ChunkMeta,
+  }));
+
+  await index.upsert(records);
+  return { inserted: records.length };
+}
+
 export async function queryTopK(params: {
   workspaceId: string;
   queryVector: number[];

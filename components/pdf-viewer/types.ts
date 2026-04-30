@@ -35,6 +35,8 @@ export interface PdfViewerProps {
   userId: string;
   onClose: () => void;
   onSendToChat?: (text: string) => void;
+  initialPage?: number;
+  highlightText?: string;
 }
 
 export type HighlightGroup = [page: number, highlights: DBHighlightSchema[]];

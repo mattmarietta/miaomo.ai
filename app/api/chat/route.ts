@@ -4,7 +4,7 @@ import { messageSchema, userMessageSchema } from "@/lib/firebase/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { serverAuth } from "@/lib/firebase/firebaseServer";
 import { getChatById, getWorkspaceById, getWorkspaceFiles, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById, updateWorkspaceTitleById } from "@/lib/firebase/server-queries";
-import { aiAgent, generateTitleFromUserMessage, setAgentUserId, setAgentWorkspaceId, setAgentFiles } from "@/app/api/chat/ai";
+import { aiAgent, generateTitleFromUserMessage, setAgentUserId, setAgentWorkspaceId, setAgentFiles, setWebSearchMode } from "@/app/api/chat/ai";
 import { createVertex } from "@ai-sdk/google-vertex/edge";
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 // Allow streaming responses up to 30 seconds
@@ -23,6 +23,7 @@ export const postRequestBodySchema = z.object({
     message: userMessageSchema.optional(),
     messages: z.array(messageSchema).optional(),
     workspaceId: z.string(),
+    webSearchMode: z.boolean().optional(),
 });
 
 type PostRequestBody = z.infer<typeof postRequestBodySchema>;
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
         throw new Error("There was an error parsing the post body request")
     }
 
-    const { id, messages, workspaceId } = requestBody
+    const { id, messages, workspaceId, webSearchMode } = requestBody
     console.log("Chat request - id:", id, "workspaceId:", workspaceId)
     const uiMessages = messages as UIMessage[]
     const message = uiMessages.at(-1);
@@ -98,6 +99,7 @@ export async function POST(req: Request) {
 
                 setAgentUserId(auth.userId);
                 setAgentWorkspaceId(workspaceId);
+                setWebSearchMode(webSearchMode ?? false);
                 const files = await getWorkspaceFiles({ workspaceId });
                 setAgentFiles(files);
                 const result = await aiAgent.stream({

@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/Auth";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Chat } from "@/components/chat/Chat";
 import { ChatAgent } from "@/app/api/chat/ai";
 import { subscribeWorkspaceFiles } from "@/lib/firebase/client-queries";
@@ -29,6 +29,8 @@ export default function WorkspaceChatPage() {
   const [summaryDialogFile, setSummaryDialogFile] = useState<DBWorkspaceFileSchema | null>(null);
   const [externalMessage, setExternalMessage] = useState<string>("");
   const [chatMessages, setChatMessages] = useState<ChatAgent[] | null>(null);
+  const [citationPage, setCitationPage] = useState<number | undefined>();
+  const [citationText, setCitationText] = useState<string | undefined>();
 
   useEffect(() => {
     if (loading) return;
@@ -106,6 +108,13 @@ export default function WorkspaceChatPage() {
     setExternalMessage("");
   };
 
+  const handleCitationClick = useCallback((citation: { fileId: string; page?: number; text: string }) => {
+    // Navigate to the file in the PDF viewer
+    router.push(`/workspace/${id}/chat/${chatId}?file=${encodeURIComponent(citation.fileId)}`);
+    setCitationPage(citation.page ?? undefined);
+    setCitationText(citation.text?.slice(0, 200));
+  }, [id, chatId, router]);
+
   if (loading || chatMessages === null) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
@@ -136,7 +145,10 @@ export default function WorkspaceChatPage() {
           externalMessage={externalMessage}
           onExternalMessageSent={handleExternalMessageSent}
           hideExternalMessage={true}
+          onCitationClick={handleCitationClick}
           onFileClick={(file) => {
+            setCitationPage(undefined);
+            setCitationText(undefined);
             router.push(`/workspace/${id}/chat/${chatId}?file=${encodeURIComponent(file.id)}`)
           }}
         />
@@ -151,8 +163,14 @@ export default function WorkspaceChatPage() {
             fileId={selectedFile.id}
             workspaceId={id}
             userId={user.uid}
-            onClose={() => router.push(`/workspace/${id}/chat/${chatId}`)}
+            onClose={() => {
+              setCitationPage(undefined);
+              setCitationText(undefined);
+              router.push(`/workspace/${id}/chat/${chatId}`);
+            }}
             onSendToChat={(text) => setExternalMessage(text)}
+            initialPage={citationPage}
+            highlightText={citationText}
           />
         </div>
       )}

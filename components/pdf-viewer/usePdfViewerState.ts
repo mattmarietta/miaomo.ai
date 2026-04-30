@@ -40,9 +40,12 @@ export function usePdfViewerState({
   workspaceId,
   userId,
   onSendToChat,
-}: Pick<PdfViewerProps, "fileId" | "workspaceId" | "userId" | "onSendToChat">) {
+  initialPage,
+  highlightText,
+}: Pick<PdfViewerProps, "fileId" | "workspaceId" | "userId" | "onSendToChat" | "initialPage" | "highlightText">) {
   const [numPages, setNumPages] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
+  const [citationHighlight, setCitationHighlight] = useState<string | undefined>(highlightText);
   const [containerWidth, setContainerWidth] = useState(600);
   const [highlights, setHighlights] = useState<DBHighlightSchema[]>([]);
   const [pendingSelection, setPendingSelection] =
@@ -78,6 +81,18 @@ export function usePdfViewerState({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (initialPage && initialPage >= 1) {
+      setCurrentPage(initialPage);
+      setPageInput(String(initialPage));
+      setTextLayerEl(null);
+    }
+  }, [initialPage]);
+
+  useEffect(() => {
+    setCitationHighlight(highlightText);
+  }, [highlightText]);
 
   useEffect(() => {
     setHighlights([]);
@@ -391,6 +406,7 @@ export function usePdfViewerState({
 
   return {
     askAiFromSelection,
+    citationHighlight,
     containerRef,
     containerWidth,
     copiedFlash,

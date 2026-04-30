@@ -14,7 +14,15 @@ import {
   DBWorkspaceFileSchema,
   DBChatSchema,
 } from "@/lib/firebase/schema";
-import { Plus, FolderOpen, Clock, FileText, MessageSquare } from "lucide-react";
+import { Plus, FolderOpen, Clock, FileText, MessageSquare, Sparkles, LayoutGrid } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 function WorkspaceCard({
   workspace,
@@ -43,36 +51,54 @@ function WorkspaceCard({
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
+  const recentFileNames = files.slice(0, 3).map((f) => f.originalName);
+
   return (
     <button
       onClick={onClick}
-      className="group flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-5 hover:bg-accent/50 transition-colors cursor-pointer text-left min-h-[160px]"
+      className="group flex flex-col items-start gap-3 rounded-xl border border-border bg-card overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer text-left"
     >
-      <div className="rounded-lg bg-primary/10 p-2.5">
-        <FolderOpen className="size-5 text-primary" />
-      </div>
-      <div className="flex-1 min-w-0 w-full">
-        <h3 className="font-medium text-foreground truncate">
-          {workspace.title || "Untitled Workspace"}
-        </h3>
-      </div>
+      <div className="h-1 w-full bg-primary" />
+      <div className="flex flex-col gap-3 px-5 pb-5 pt-3 w-full">
+        <div className="rounded-lg bg-primary/10 p-2.5 w-fit">
+          <FolderOpen className="size-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0 w-full">
+          <h3 className="font-medium text-foreground truncate">
+            {workspace.title || "Untitled Workspace"}
+          </h3>
+          {recentFileNames.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {recentFileNames.map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  <FileText className="size-2.5" />
+                  <span className="truncate max-w-[100px]">{name}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <FileText className="size-3" />
-          <span>
-            {files.length} {files.length === 1 ? "file" : "files"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <MessageSquare className="size-3" />
-          <span>
-            {chats.length} {chats.length === 1 ? "chat" : "chats"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 ml-auto">
-          <Clock className="size-3" />
-          <span>{formatDate(workspace.updatedAt)}</span>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t border-border/50">
+          <div className="flex items-center gap-1">
+            <FileText className="size-3" />
+            <span>
+              {files.length} {files.length === 1 ? "file" : "files"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <MessageSquare className="size-3" />
+            <span>
+              {chats.length} {chats.length === 1 ? "chat" : "chats"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 ml-auto">
+            <Clock className="size-3" />
+            <span>{formatDate(workspace.updatedAt)}</span>
+          </div>
         </div>
       </div>
     </button>
@@ -119,15 +145,23 @@ export default function DashboardPage() {
     <main className="flex-1 overflow-y-auto bg-background">
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Welcome back
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{user.email}</p>
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {getGreeting()}, {user.displayName || user.email || "there"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Here&apos;s an overview of your workspaces
+            </p>
+          </div>
+          <Button onClick={handleCreateWorkspace} className="gap-2">
+            <Plus className="size-4" />
+            New Workspace
+          </Button>
         </div>
 
         {/* Workspaces Grid */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4">
           <h2 className="text-lg font-medium text-foreground">
             Your Workspaces
           </h2>
@@ -159,11 +193,21 @@ export default function DashboardPage() {
         </div>
 
         {workspaces.length === 0 && (
-          <div className="text-center py-12">
-            <FolderOpen className="size-12 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground">
-              No workspaces yet. Create one to get started.
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="rounded-full bg-primary/10 p-6 mb-6">
+              <Sparkles className="size-10 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">
+              Create your first workspace
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-md">
+              Workspaces help you organize your documents and conversations.
+              Upload files, chat with AI, and generate study materials.
             </p>
+            <Button onClick={handleCreateWorkspace} size="lg" className="gap-2">
+              <Plus className="size-4" />
+              Create Workspace
+            </Button>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, doc, setDoc, deleteDoc, Timestamp, query, where, onSnapshot } from "firebase/firestore";
-import { DBChatSchema, DBWorkspaceSchema, DBWorkspaceFileSchema, DBHighlightSchema } from "@/lib/firebase/schema";
+import { collection, doc, setDoc, deleteDoc, Timestamp, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
+import { DBChatSchema, DBMessageSchema, DBWorkspaceSchema, DBWorkspaceFileSchema, DBHighlightSchema } from "@/lib/firebase/schema";
 
 
 // ── Workspaces ──
@@ -222,6 +222,31 @@ export function subscribeWorkspaceChats(
         },
         (err) => {
             console.error("subscribeWorkspaceChats error:", err);
+            onError?.(err);
+        },
+    );
+}
+
+export function subscribeChatsByUserId(
+    userId: string,
+    onChats: (chats: DBChatSchema[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const chatsCol = collection(db, "chats");
+    const q = query(chatsCol, where("userId", "==", userId));
+    return onSnapshot(
+        q,
+        (snap) => {
+            const chats = snap.docs.map((d) => ({ ...d.data(), id: d.id } as DBChatSchema));
+            chats.sort((a, b) => {
+                const aTime = (a.createdAt as any)?.toMillis?.() ?? 0;
+                const bTime = (b.createdAt as any)?.toMillis?.() ?? 0;
+                return bTime - aTime;
+            });
+            onChats(chats);
+        },
+        (err) => {
+            console.error("subscribeChatsByUserId error:", err);
             onError?.(err);
         },
     );
