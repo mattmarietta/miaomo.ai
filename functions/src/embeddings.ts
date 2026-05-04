@@ -1,73 +1,77 @@
 import {GoogleGenerativeAIEmbeddings} from "@langchain/google-genai";
-import {Pinecone} from "@pinecone-database/pinecone";
 
 export type SparseVector = {indices: number[]; values: number[]};
 
 const SPARSE_MODEL = "pinecone-sparse-english-v0";
+const PINECONE_EMBED_URL = "https://api.pinecone.io/embed";
 
 export function getEmbeddingsClient() {
   const googleKey = process.env.GOOGLE_API_KEY;
-  if (!googleKey) {
-    throw new Error("Missing env var: GOOGLE_API_KEY");
-  }
-
-  // Create the embedding instance
-  const embeddings = new GoogleGenerativeAIEmbeddings({
+  if (!googleKey) throw new Error("Missing env var: GOOGLE_API_KEY");
+  return new GoogleGenerativeAIEmbeddings({
     apiKey: googleKey,
     model: "gemini-embedding-001",
   });
-
-  return embeddings;
 }
 
-function getPineconeInferenceClient(): Pinecone {
+// The Pinecone SDK v4 strips sparse_values out of inference responses (OpenAPI codegen bug).
+// Call the REST API directly to get the full raw response.
+async function pineconeEmbedRaw(
+  texts: string[],
+  inputType: "passage" | "query"
+): Promise<SparseVector[]> {
   const apiKey = process.env.PINECONE_API_KEY;
   if (!apiKey) throw new Error("Missing env var: PINECONE_API_KEY");
-  return new Pinecone({apiKey});
-}
 
-// Pinecone inference returns { sparseValues, sparseIndices }; storage/query expect { indices, values }.
-function toSparseVector(emb: {sparseIndices?: number[]; sparseValues?: number[]}): SparseVector {
-  if (!emb.sparseIndices || !emb.sparseValues) {
-    throw new Error("Pinecone sparse embedding response missing sparseIndices/sparseValues");
+  const body = {
+    model: SPARSE_MODEL,
+    inputs: texts.map((text) => ({text})),
+    parameters: {input_type: inputType, truncate: "END"},
+  };
+
+  const res = await fetch(PINECONE_EMBED_URL, {
+    method: "POST",
+    headers: {
+      "Api-Key": apiKey,
+      "Content-Type": "application/json",
+      "X-Pinecone-Api-Version": "2024-10",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Pinecone embed API error ${res.status}: ${err}`);
   }
-  return {indices: emb.sparseIndices, values: emb.sparseValues};
+
+  const json = await res.json() as {
+    data: Array<{sparse_indices?: number[]; sparse_values?: number[]}>;
+  };
+
+  return json.data.map((item, i) => {
+    if (!item.sparse_indices || !item.sparse_values) {
+      throw new Error(`Pinecone sparse embed item ${i} missing sparse_indices/sparse_values`);
+    }
+    return {indices: item.sparse_indices, values: item.sparse_values};
+  });
 }
 
-// Two functions, one for document embedding and one for query embedding
 export async function embedDocuments(texts: string[]) {
   const emb = getEmbeddingsClient();
-  const vectors = await emb.embedDocuments(texts);
-  return vectors;
+  return emb.embedDocuments(texts);
 }
 
 export async function embedQuery(text: string) {
   const emb = getEmbeddingsClient();
-  const vector = await emb.embedQuery(text);
-  return vector;
+  return emb.embedQuery(text);
 }
 
 export async function embedSparseDocuments(texts: string[]): Promise<SparseVector[]> {
   if (texts.length === 0) return [];
-  const pc = getPineconeInferenceClient();
-  const res = await pc.inference.embed(SPARSE_MODEL, texts, {
-    inputType: "passage",
-    truncate: "END",
-  });
-  return (res.data ?? []).map((d) =>
-    toSparseVector(d as {sparseIndices?: number[]; sparseValues?: number[]})
-  );
+  return pineconeEmbedRaw(texts, "passage");
 }
 
 export async function embedSparseQuery(text: string): Promise<SparseVector> {
-  const pc = getPineconeInferenceClient();
-  const res = await pc.inference.embed(SPARSE_MODEL, [text], {
-    inputType: "query",
-    truncate: "END",
-  });
-  const first = res.data?.[0];
-  if (!first) throw new Error("Pinecone sparse embed returned no data");
-  return toSparseVector(first as {sparseIndices?: number[]; sparseValues?: number[]});
+  const results = await pineconeEmbedRaw([text], "query");
+  return results[0];
 }
-
-
