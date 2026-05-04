@@ -8,7 +8,7 @@ import * as fs from "fs";
 
 import {extractPdfText} from "./ingest/pdf.js";
 import {chunkText} from "./ingest/chunk.js";
-import {embedDocuments} from "./embeddings.js";
+import {embedDocuments, embedSparseDocuments} from "./embeddings.js";
 import {upsertChunks} from "./pinecone.js";
 
 initializeApp();
@@ -135,8 +135,15 @@ export const onUploadFinalized = onObjectFinalized(
       const chunkTexts = chunks.map((c) => c.chunkText);
       console.log("[INGEST] chunked", {chunkCount: chunks.length});
 
-      const vectors = await embedDocuments(chunkTexts);
-      console.log("[INGEST] embedded", {vectorCount: vectors.length, dim: vectors[0]?.length});
+      const [vectors, sparseVectors] = await Promise.all([
+        embedDocuments(chunkTexts),
+        embedSparseDocuments(chunkTexts),
+      ]);
+      console.log("[INGEST] embedded", {
+        vectorCount: vectors.length,
+        dim: vectors[0]?.length,
+        sparseCount: sparseVectors.length,
+      });
 
       const source = `gs://${obj.bucket}/${obj.name}`;
       const chunkPayload = chunks.map((c) => ({
@@ -150,6 +157,7 @@ export const onUploadFinalized = onObjectFinalized(
         workspaceId,
         fileId,
         vectors,
+        sparseVectors,
         chunks: chunkPayload,
       });
 

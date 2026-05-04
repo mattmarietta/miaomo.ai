@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { embedDocuments } from "@/lib/rag/embeddings";
+import { embedDocuments, embedSparseDocuments } from "@/lib/rag/embeddings";
 import { upsertChunks } from "@/lib/rag/pinecone";
 import { NextRequest } from "next/server";
 
@@ -128,14 +128,18 @@ export async function POST(
       const batchChunks = chunks.slice(i, i + BATCH_SIZE);
       const batchTexts = batchChunks.map((c) => c.chunkText);
 
-      // Embed batch
-      const vectorsBatch = await embedDocuments(batchTexts);
+      // Embed batch (dense + sparse in parallel for hybrid index)
+      const [vectorsBatch, sparseVectorsBatch] = await Promise.all([
+        embedDocuments(batchTexts),
+        embedSparseDocuments(batchTexts),
+      ]);
 
       // Upsert batch
       const result = await upsertChunks({
         userId,
         docId,
         vectors: vectorsBatch,
+        sparseVectors: sparseVectorsBatch,
         chunks: batchChunks,
       });
 
