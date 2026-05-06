@@ -28,7 +28,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile, updateWorkspaceFileStatus } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, generateWorkspaceFileId, updateWorkspaceFileStatus } from "@/lib/firebase/client-queries";
 
 export const AppSidebarWorkspaceView = ({
   workspaceId,
@@ -57,7 +57,8 @@ export const AppSidebarWorkspaceView = ({
     if (!file || !user) return;
 
     setUploading(true);
-    const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
+    const fileId = generateWorkspaceFileId(workspaceId);
+    const storagePath = `workspaces/${workspaceId}/files/${fileId}/${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -71,14 +72,14 @@ export const AppSidebarWorkspaceView = ({
       async () => {
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
-          const fileId = await addWorkspaceFile(workspaceId, {
+          await addWorkspaceFile(workspaceId, {
             originalName: file.name,
             mimeType: file.type || "application/octet-stream",
             size: file.size,
             storagePath,
             downloadUrl: url,
             ownerUid: user.uid,
-          });
+          }, fileId);
 
           // Check if file type supports OCR
           const ocrSupportedTypes = [
