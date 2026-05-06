@@ -111,6 +111,8 @@ export function usePdfViewerState({
     return () => unsub();
   }, [workspaceId, fileId, userId]);
 
+  const [citationRects, setCitationRects] = useState<HighlightRect[]>([]);
+
   const onPageRenderSuccess = useCallback(() => {
     const el = pageContainerRef.current?.querySelector(
       ".react-pdf__Page__textContent",
@@ -121,7 +123,53 @@ export function usePdfViewerState({
     if (wrapper && wrapper.width > 0 && wrapper.height > 0) {
       setPageSize({ width: wrapper.width, height: wrapper.height });
     }
-  }, []);
+
+    setCitationRects([]);
+    if (!citationHighlight || !wrapper || wrapper.width === 0) return;
+
+    const textLayer = el as HTMLElement | null;
+    if (!textLayer) return;
+
+    const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+    const needle = norm(citationHighlight);
+    if (needle.length < 10) return;
+
+    const spans = Array.from(textLayer.querySelectorAll("span")) as HTMLElement[];
+    const texts = spans.map((s) => s.textContent || "");
+    const fullText = norm(texts.join(" "));
+
+    const prefix = needle.slice(0, Math.min(100, needle.length));
+    const matchStart = fullText.indexOf(prefix);
+    if (matchStart < 0) return;
+    const matchEnd = matchStart + Math.min(needle.length, fullText.length - matchStart);
+
+    const pageW = wrapper.width || 1;
+    const pageH = wrapper.height || 1;
+    const rects: HighlightRect[] = [];
+    let charPos = 0;
+
+    for (let i = 0; i < spans.length; i++) {
+      const spanText = norm(texts[i]);
+      if (!spanText) continue;
+      const spanStart = charPos;
+      const spanEnd = charPos + spanText.length;
+      charPos = spanEnd + 1;
+
+      if (spanEnd <= matchStart || spanStart >= matchEnd) continue;
+
+      const r = spans[i].getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+
+      const x = r.left - wrapper.left;
+      const y = r.top - wrapper.top;
+      rects.push({
+        x, y, width: r.width, height: r.height,
+        xPct: x / pageW, yPct: y / pageH,
+        widthPct: r.width / pageW, heightPct: r.height / pageH,
+      });
+    }
+    setCitationRects(rects);
+  }, [citationHighlight]);
 
   const zoomIn = useCallback(
     () => setScale((prev) => Math.min(prev + 0.1, 3.0)),
@@ -372,10 +420,25 @@ export function usePdfViewerState({
     [numPages, resetToolbar],
   );
 
-  const pageHighlights = useMemo(
-    () => highlights.filter((h) => h.pageNumber === currentPage),
-    [highlights, currentPage],
-  );
+  const pageHighlights = useMemo(() => {
+    const page = highlights.filter((h) => h.pageNumber === currentPage);
+    if (citationRects.length > 0) {
+      page.push({
+        id: "__citation__",
+        documentId: "",
+        userId: "",
+        pageNumber: currentPage,
+        start: 0,
+        end: 0,
+        text: citationHighlight || "",
+        color: "#34d399",
+        rects: citationRects,
+        createdAt: "",
+        style: "highlight",
+      });
+    }
+    return page;
+  }, [highlights, currentPage, citationRects, citationHighlight]);
 
   const groupedHighlights = useMemo(() => {
     const groups = new Map<number, DBHighlightSchema[]>();

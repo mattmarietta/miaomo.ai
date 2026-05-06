@@ -1,6 +1,6 @@
 import { generateText, InferAgentUIMessage, UIMessage } from "ai";
 
-import { tool, ToolLoopAgent } from "ai";
+import { tool, ToolLoopAgent, stepCountIs } from "ai";
 import { z } from "zod";
 
 import { retrieveContext } from "@/lib/rag/retrieve";
@@ -33,9 +33,20 @@ export function setAgentFiles(files: { id: string; originalName: string }[]) {
 }
 
 let _webSearchMode = false;
+let _selectedModel = "gemini-2.0-flash";
+
+const ALLOWED_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"];
 
 export function setWebSearchMode(enabled: boolean) {
   _webSearchMode = enabled;
+}
+
+export function setAgentModel(model: string | undefined) {
+  if (model && ALLOWED_MODELS.includes(model)) {
+    _selectedModel = model;
+  } else {
+    _selectedModel = "gemini-2.0-flash";
+  }
 }
 
 function buildInstructions(): string {
@@ -50,16 +61,22 @@ function buildInstructions(): string {
   return `You are a helpful study assistant. The user has the following files in their workspace:
 ${fileList}
 
-IMPORTANT: You MUST use the searchDocuments tool to search the user's documents before answering ANY question that could be related to their study material or uploaded files. Always search first, then answer based on the results. If the user asks about a specific file, mention which file you're searching. If no relevant results are found, let the user know and offer to help differently.
+IMPORTANT: Use the searchDocuments tool ONCE to search the user's documents before answering questions that could be related to their study material or uploaded files. If no relevant results are found, do NOT retry with different queries — instead tell the user no matching content was found and offer to help differently or use web search.
 
-When citing information from search results, ALWAYS include the source file name at the end of your answer in a "Sources" section. Format each source as: **[filename]** (page N, chunk #N). Use the "source", "page", and "chunkIndex" fields from the results. Only cite sources that you actually used in your answer.${webSearchInstructions}
+CRITICAL: Never call searchDocuments more than twice per user message. If the first search returns no results, you may try ONE more query with different wording. After that, stop searching and respond based on what you have.
 
-You can also create quizzes and flashcard decks using the createQuiz and createFlashcards tools. Use these when the user asks to test their knowledge, create practice questions, make study materials, or generate flashcards. Always search the documents first to gather content, then pass that content to the quiz/flashcard tool.`;
+When citing information from search results, include the source file name at the end of your answer in a "Sources" section. Format each source as: **[filename]** (page N, chunk #N). Use the "source", "page", and "chunkIndex" fields from the results. Only cite sources that you actually used in your answer.${webSearchInstructions}
+
+You can also create quizzes and flashcard decks using the createQuiz and createFlashcards tools. Use these when the user asks to test their knowledge, create practice questions, make study materials, or generate flashcards. Search the documents first to gather content, then pass that content to the quiz/flashcard tool.`;
 }
 
 export const aiAgent = new ToolLoopAgent({
-  model: google("gemini-flash-latest"),
+  model: google("gemini-2.0-flash"),
   get instructions() { return buildInstructions(); },
+  stopWhen: stepCountIs(4),
+  prepareCall: () => ({
+    model: google(_selectedModel),
+  }),
   tools: {
     searchDocuments: tool({
       description:

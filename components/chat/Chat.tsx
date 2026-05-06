@@ -40,7 +40,11 @@ interface Message {
     parts: MessagePart[];
 }
 
-const models = ["Opus 4.5", "Sonnet 4", "Haiku 3.5", "GPT-4o"];
+const models = [
+    { label: "Fast", value: "gemini-2.0-flash" },
+    { label: "Balanced", value: "gemini-2.5-flash" },
+    { label: "Smart", value: "gemini-2.5-pro" },
+];
 
 export interface Citation {
     fileId: string;
@@ -67,18 +71,18 @@ interface ChatProps {
 export function Chat({ user, initialMessages, chatId, workspaceId, files = [], onFileClick, onCitationClick, externalMessage, onExternalMessageSent, hideExternalMessage }: ChatProps) {
     const router = useRouter();
     const [webSearchMode, setWebSearchMode] = useState(false);
+    const [selectedModel, setSelectedModel] = useState(models[0]);
+    const [modelOpen, setModelOpen] = useState(false);
     const transport = useMemo(() => new DefaultChatTransport({
         api: "/api/chat",
-        body: workspaceId ? { workspaceId, webSearchMode } : undefined,
-    }), [workspaceId, webSearchMode]);
+        body: workspaceId ? { workspaceId, webSearchMode, model: selectedModel.value } : undefined,
+    }), [workspaceId, webSearchMode, selectedModel]);
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         id: chatId,
         transport,
         messages: initialMessages,
     });
     const [input, setInput] = useState("");
-    const [selectedModel, setSelectedModel] = useState("Opus 4.5");
-    const [modelOpen, setModelOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,7 +134,7 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                     },
                     body: {
                         attachedFiles: [],
-                        model: selectedModel,
+                        model: selectedModel.value,
                     },
                 });
                 setLastMessageWasExternal(true);
@@ -429,7 +433,7 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                         size="sm"
                                         className="h-7 rounded-full text-xs gap-1"
                                     >
-                                        {selectedModel}
+                                        {selectedModel.label}
                                         <ChevronDown size={12} className="text-muted-foreground" />
                                     </Button>
                                 </PopoverTrigger>
@@ -439,16 +443,16 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
                                             <CommandGroup>
                                                 {models.map((model) => (
                                                     <CommandItem
-                                                        key={model}
-                                                        value={model}
+                                                        key={model.value}
+                                                        value={model.value}
                                                         onSelect={() => {
                                                             setSelectedModel(model);
                                                             setModelOpen(false);
                                                         }}
                                                         className="text-sm cursor-pointer"
                                                     >
-                                                        {model}
-                                                        {selectedModel === model && (
+                                                        {model.label}
+                                                        {selectedModel.value === model.value && (
                                                             <Check size={14} className="ml-auto" />
                                                         )}
                                                     </CommandItem>
@@ -511,7 +515,7 @@ export function Chat({ user, initialMessages, chatId, workspaceId, files = [], o
 
                 { /*Study Tools button*/ }
                 <button
-                    onClick={() => router.push("/workspace/quiz-builder")}
+                    onClick={() => router.push("/workspace-public/quiz-builder")}
                     className="absolute bottom-6 left-6 px-4 py-2 border rounded-xl text-sm hover:bg-muted"
                 >
                     <BookOpen size={16} />

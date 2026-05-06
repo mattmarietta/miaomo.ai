@@ -21,7 +21,7 @@ export async function generateQuestionsFromText(
   count: number = 10,
   types: string[] = ["multiple-choice", "true-false", "written", "matching"]
 ): Promise<Question[]> {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (!apiKey) {
     throw new Error("Gemini API key not configured");

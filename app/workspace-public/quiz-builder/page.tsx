@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import { Quiz, getUserQuizzes, createQuiz, deleteQuiz, updateQuiz } from "@/lib/firebase/quizStore";
 import { Flashcard, getUserDecks, createDeck, deleteDeck } from "@/lib/firebase/flashcardStore";
-import { generateQuestionsFromText } from "@/lib/aiQuizGenerator";
 import { subscribeWorkspacesByUserId, subscribeWorkspaceFiles } from "@/lib/firebase/client-queries";
 import { DBWorkspaceSchema, DBWorkspaceFileSchema } from "@/lib/firebase/schema";
 import { ArrowLeft, Plus, FileText, Trash2, Play, Sparkles, Layers, Upload, ClipboardPaste, X, FolderOpen, Search, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
@@ -192,12 +191,19 @@ export default function StudyToolsPage() {
       const quiz = await createQuiz(user.uid, title, `Generated from workspace files: ${ragQuery}`);
 
       setGeneratingStatus("Generating questions...");
-      const questions = await generateQuestionsFromText(combinedText, questionCount, types);
+      const token = await user.getIdToken();
+      const res = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: combinedText, count: questionCount, types }),
+      });
+      if (!res.ok) throw new Error("Generation failed");
+      const { questions } = await res.json();
 
       setGeneratingStatus("Saving...");
       await updateQuiz(quiz.id, { questions });
 
-      router.push(`/workspace/quiz-builder/${quiz.id}`);
+      router.push(`/workspace-public/quiz-builder/${quiz.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to generate. Please try again.");
@@ -212,7 +218,7 @@ export default function StudyToolsPage() {
     setCreating(true);
     try {
       const quiz = await createQuiz(user.uid, newTitle.trim(), newDesc.trim());
-      router.push(`/workspace/quiz-builder/${quiz.id}`);
+      router.push(`/workspace-public/quiz-builder/${quiz.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to create quiz");
@@ -246,12 +252,19 @@ export default function StudyToolsPage() {
       const quiz = await createQuiz(user.uid, title, "Generated from pasted text");
       
       setGeneratingStatus("Generating questions...");
-      const questions = await generateQuestionsFromText(pasteText, questionCount, types);
-      
+      const token = await user.getIdToken();
+      const res = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: pasteText, count: questionCount, types }),
+      });
+      if (!res.ok) throw new Error("Generation failed");
+      const { questions } = await res.json();
+
       setGeneratingStatus("Saving...");
       await updateQuiz(quiz.id, { questions });
       
-      router.push(`/workspace/quiz-builder/${quiz.id}`);
+      router.push(`/workspace-public/quiz-builder/${quiz.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to generate. Please try again.");
@@ -266,7 +279,7 @@ export default function StudyToolsPage() {
     setCreating(true);
     try {
       const deck = await createDeck(user.uid, deckTitle.trim(), deckDesc.trim());
-      router.push(`/workspace/quiz-builder/flashcards/${deck.id}`);
+      router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to create deck");
@@ -403,7 +416,7 @@ export default function StudyToolsPage() {
                 {quizzes.map(quiz => (
                   <div
                     key={quiz.id}
-                    onClick={() => router.push(`/workspace/quiz-builder/${quiz.id}`)}
+                    onClick={() => router.push(`/workspace-public/quiz-builder/${quiz.id}`)}
                     className="flex items-center justify-between p-4 bg-card border border-border rounded-xl cursor-pointer hover:bg-muted/50 group"
                   >
                     <div className="flex items-center gap-4">
@@ -420,7 +433,7 @@ export default function StudyToolsPage() {
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
                       {quiz.questions.length > 0 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace/quiz-builder/${quiz.id}/take`); }}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace-public/quiz-builder/${quiz.id}/take`); }}
                           className="p-2 hover:bg-muted rounded-lg"
                         >
                           <Play size={18} className="text-muted-foreground" />
@@ -458,7 +471,7 @@ export default function StudyToolsPage() {
                 {decks.map(deck => (
                   <div
                     key={deck.id}
-                    onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deck.id}`)}
+                    onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`)}
                     className="flex items-center justify-between p-4 bg-card border border-border rounded-xl cursor-pointer hover:bg-muted/50 group"
                   >
                     <div className="flex items-center gap-4">
@@ -475,7 +488,7 @@ export default function StudyToolsPage() {
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
                       {deck.cards.length > 0 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace/quiz-builder/flashcards/${deck.id}/study`); }}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}/study`); }}
                           className="p-2 hover:bg-muted rounded-lg"
                         >
                           <Play size={18} className="text-muted-foreground" />

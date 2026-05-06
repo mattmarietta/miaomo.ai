@@ -45,7 +45,7 @@ export default function DeckEditorPage() {
       try {
         const data = await getDeck(deckId);
         if (!data) {
-          router.replace("/workspace/quiz-builder");
+          router.replace("/workspace-public/quiz-builder");
           return;
         }
         setDeck(data);
@@ -156,7 +156,7 @@ export default function DeckEditorPage() {
       <header className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => router.push("/workspace/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
+            <button onClick={() => router.push("/workspace-public/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
               <ArrowLeft size={20} className="text-muted-foreground" />
             </button>
             <div>
@@ -169,7 +169,7 @@ export default function DeckEditorPage() {
             {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
             {deck.cards.length > 0 && (
               <button
-                onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}/study`)}
+                onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}/study`)}
                 className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium"
               >
                 <Play size={16} />
