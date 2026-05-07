@@ -305,7 +305,6 @@ export default function TakeQuizPage({ params }: PageProps) {
 
                       {q.explanation && (
                         <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
-                          <span className="text-muted-foreground">💡 </span>
                           {q.explanation}
                         </div>
                       )}

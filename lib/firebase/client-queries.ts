@@ -309,3 +309,65 @@ export async function deleteWorkspace(
 
     await deleteDoc(doc(workspacesCollection, workspaceId));
 }
+
+// ── Study Tools ──
+
+export interface QuizSummary {
+    id: string;
+    title: string;
+    questionCount: number;
+    createdAt: any;
+}
+
+export interface FlashcardDeckSummary {
+    id: string;
+    title: string;
+    cardCount: number;
+    createdAt: any;
+}
+
+export function subscribeQuizzesByUserId(
+    userId: string,
+    onQuizzes: (quizzes: QuizSummary[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const q = query(
+        collection(db, "quizzes"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
+    );
+    return onSnapshot(q, (snap) => {
+        onQuizzes(snap.docs.map((d) => {
+            const data = d.data();
+            return {
+                id: d.id,
+                title: data.title || "Untitled Quiz",
+                questionCount: Array.isArray(data.questions) ? data.questions.length : 0,
+                createdAt: data.createdAt,
+            };
+        }));
+    }, (err) => onError?.(err));
+}
+
+export function subscribeFlashcardDecksByUserId(
+    userId: string,
+    onDecks: (decks: FlashcardDeckSummary[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const q = query(
+        collection(db, "flashcardDecks"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
+    );
+    return onSnapshot(q, (snap) => {
+        onDecks(snap.docs.map((d) => {
+            const data = d.data();
+            return {
+                id: d.id,
+                title: data.title || "Untitled Deck",
+                cardCount: Array.isArray(data.cards) ? data.cards.length : 0,
+                createdAt: data.createdAt,
+            };
+        }));
+    }, (err) => onError?.(err));
+}

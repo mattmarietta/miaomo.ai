@@ -9,13 +9,17 @@ import {
   subscribeWorkspaceChats,
   createWorkspace,
   deleteWorkspace,
+  subscribeQuizzesByUserId,
+  subscribeFlashcardDecksByUserId,
+  type QuizSummary,
+  type FlashcardDeckSummary,
 } from "@/lib/firebase/client-queries";
 import {
   DBWorkspaceSchema,
   DBWorkspaceFileSchema,
   DBChatSchema,
 } from "@/lib/firebase/schema";
-import { Plus, FolderOpen, Clock, FileText, MessageSquare, Sparkles, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, FolderOpen, Clock, FileText, MessageSquare, Sparkles, MoreHorizontal, Trash2, GraduationCap, Layers, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function getGreeting(): string {
@@ -160,6 +164,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [workspaces, setWorkspaces] = useState<DBWorkspaceSchema[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizSummary[]>([]);
+  const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeckSummary[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<DBWorkspaceSchema | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -169,8 +175,14 @@ export default function DashboardPage() {
       router.replace("/login");
       return;
     }
-    const unsub = subscribeWorkspacesByUserId(user.uid, setWorkspaces);
-    return () => unsub();
+    const unsubWorkspaces = subscribeWorkspacesByUserId(user.uid, setWorkspaces);
+    const unsubQuizzes = subscribeQuizzesByUserId(user.uid, setQuizzes);
+    const unsubDecks = subscribeFlashcardDecksByUserId(user.uid, setFlashcardDecks);
+    return () => {
+      unsubWorkspaces();
+      unsubQuizzes();
+      unsubDecks();
+    };
   }, [loading, user, router]);
 
   if (loading) {
@@ -278,6 +290,62 @@ export default function DashboardPage() {
               <Plus className="size-4" />
               Create Workspace
             </Button>
+          </div>
+        )}
+
+        {/* Study Tools Section */}
+        {(quizzes.length > 0 || flashcardDecks.length > 0) && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-foreground">Study Tools</h2>
+              <button
+                onClick={() => router.push("/workspace-public/quiz-builder")}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                View all
+                <ArrowRight className="size-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {quizzes.slice(0, 4).map((quiz) => (
+                <button
+                  key={quiz.id}
+                  onClick={() => router.push(`/workspace-public/quiz-builder/${quiz.id}`)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:shadow-sm hover:-translate-y-0.5 transition-all text-left"
+                >
+                  <div className="rounded-lg bg-primary/10 p-2 shrink-0">
+                    <GraduationCap className="size-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{quiz.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {quiz.questionCount} {quiz.questionCount === 1 ? "question" : "questions"}
+                    </p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+
+              {flashcardDecks.slice(0, 4).map((deck) => (
+                <button
+                  key={deck.id}
+                  onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:shadow-sm hover:-translate-y-0.5 transition-all text-left"
+                >
+                  <div className="rounded-lg bg-amber-500/10 p-2 shrink-0">
+                    <Layers className="size-4 text-amber-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{deck.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {deck.cardCount} {deck.cardCount === 1 ? "card" : "cards"}
+                    </p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
