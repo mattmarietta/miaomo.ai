@@ -1,13 +1,14 @@
 "use client";
 
 import { useAuth } from "@/components/Auth";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 export default function WorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (loading) return;
@@ -15,10 +16,13 @@ export default function WorkspacePage() {
       router.push("/login");
       return;
     }
-    // Redirect to a new chat with a generated ID
     const newChatId = crypto.randomUUID();
-    router.replace(`/workspace/${id}/chat/${newChatId}`);
-  }, [user, loading, router, id]);
+    const fileParam = searchParams.get("file");
+    const target = fileParam
+      ? `/workspace/${id}/chat/${newChatId}?file=${encodeURIComponent(fileParam)}`
+      : `/workspace/${id}/chat/${newChatId}`;
+    router.replace(target);
+  }, [user, loading, router, id, searchParams]);
 
   return (
     <div className="flex h-dvh items-center justify-center bg-background">

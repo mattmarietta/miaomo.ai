@@ -2,13 +2,13 @@
 
 import { useAuth } from "@/components/Auth";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Chat } from "@/components/chat/Chat";
 import { ChatAgent } from "@/app/api/chat/ai";
 import { subscribeWorkspaceFiles } from "@/lib/firebase/client-queries";
 import { DBWorkspaceFileSchema } from "@/lib/firebase/schema";
-import { X, FileText } from "lucide-react";
-import Link from "next/link";
+import { PdfViewer } from "@/components/PdfViewer";
+import { MindMap } from "@/components/MindMap";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
 export default function WorkspaceChatPage() {
   const { id, chatId } = useParams<{ id: string; chatId: string }>();
@@ -30,6 +31,9 @@ export default function WorkspaceChatPage() {
   const [summaryDialogFile, setSummaryDialogFile] = useState<DBWorkspaceFileSchema | null>(null);
   const [externalMessage, setExternalMessage] = useState<string>("");
   const [chatMessages, setChatMessages] = useState<ChatAgent[] | null>(null);
+  const [citationPage, setCitationPage] = useState<number | undefined>();
+  const [citationText, setCitationText] = useState<string | undefined>();
+  const [showMindMap, setShowMindMap] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -70,9 +74,9 @@ export default function WorkspaceChatPage() {
         });
 
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as { messages: ChatAgent[] };
           // Convert DB messages to ChatAgent format
-          const messages: ChatAgent[] = data.messages.map((msg: any) => ({
+          const messages: ChatAgent[] = data.messages.map((msg) => ({
             id: msg.id,
             role: msg.role,
             parts: msg.parts,
@@ -93,7 +97,23 @@ export default function WorkspaceChatPage() {
     return files.find((f) => f.id === selectedFileId) || null;
   }, [selectedFileId, files]);
 
-  const selectedFileUrl = selectedFile ? (selectedFile as any).downloadUrl : null;
+  const selectedFileUrl = selectedFile?.downloadUrl ?? null;
+
+  // Opening a PDF closes the mind map.
+  useEffect(() => {
+    if (selectedFile && showMindMap) setShowMindMap(false);
+  }, [selectedFile, showMindMap]);
+
+  const toggleMindMap = useCallback(() => {
+    const next = !showMindMap;
+    if (next && selectedFileId) {
+      // Opening mind map closes any selected PDF.
+      router.push(`/workspace/${id}/chat/${chatId}`);
+    }
+    setShowMindMap(next);
+  }, [showMindMap, selectedFileId, router, id, chatId]);
+
+  const showRightPanel = (selectedFile && selectedFileUrl) || showMindMap;
 
   const handleGenerateSummary = () => {
     if (!summaryDialogFile || !summaryDialogFile.fullText) return;
@@ -107,6 +127,13 @@ export default function WorkspaceChatPage() {
     setExternalMessage("");
   };
 
+  const handleCitationClick = useCallback((citation: { fileId: string; page?: number; text: string }) => {
+    // Navigate to the file in the PDF viewer
+    router.push(`/workspace/${id}/chat/${chatId}?file=${encodeURIComponent(citation.fileId)}`);
+    setCitationPage(citation.page ?? undefined);
+    setCitationText(citation.text?.slice(0, 200));
+  }, [id, chatId, router]);
+
   if (loading || chatMessages === null) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
@@ -118,9 +145,15 @@ export default function WorkspaceChatPage() {
   if (!user) return null;
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* Chat — center */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Chat — left */}
+      <div
+        className={
+          showRightPanel
+            ? "w-[34rem] min-w-[22rem] max-w-[42%] shrink-0 flex flex-col min-h-0 border-r border-border relative"
+            : "flex-1 min-w-0 flex flex-col min-h-0 relative"
+        }
+      >
         <Chat
           key={chatId}
           user={user}
@@ -131,53 +164,55 @@ export default function WorkspaceChatPage() {
           externalMessage={externalMessage}
           onExternalMessageSent={handleExternalMessageSent}
           hideExternalMessage={true}
+          onToggleMindMap={toggleMindMap}
+          showMindMap={showMindMap}
+          onCitationClick={handleCitationClick}
           onFileClick={(file) => {
+            setCitationPage(undefined);
+            setCitationText(undefined);
             router.push(`/workspace/${id}/chat/${chatId}?file=${encodeURIComponent(file.id)}`)
           }}
         />
       </div>
 
-      {/* PDF Viewer — right panel */}
-      {selectedFile && selectedFileUrl && (
-        <div className="w-[45%] max-w-2xl border-l border-border flex flex-col min-h-0 bg-muted/30">
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <span className="text-xs font-medium truncate">
-                {selectedFile.originalName || "Document"}
-              </span>
-            </div>
-            <Link
-              href={`/workspace/${id}/chat/${chatId}`}
-              className="p-1 rounded-md hover:bg-muted transition-colors"
-            >
-              <X className="size-4 text-muted-foreground" />
-            </Link>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-h-0">
-            {selectedFileUrl ? (
-              // Display PDF using iframe
-              <iframe
-                src={selectedFileUrl}
-                className="w-full h-full border-0"
-                title={selectedFile.originalName || "Document viewer"}
-              />
-            ) : (
-              // Fallback for when no file is selected
-              <div className="p-8 bg-white text-black min-h-full">
-                <div className="max-w-4xl mx-auto">
-                  <div className="text-muted-foreground text-center py-8">
-                    Select a file to view its content
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+      {/* Right column: PDF viewer or Mind Map (mutually exclusive) */}
+      {selectedFile && selectedFileUrl ? (
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <PdfViewer
+            fileUrl={selectedFileUrl}
+            fileName={selectedFile.originalName || "Document"}
+            fileId={selectedFile.id}
+            workspaceId={id}
+            userId={user.uid}
+            onClose={() => {
+              setCitationPage(undefined);
+              setCitationText(undefined);
+              router.push(`/workspace/${id}/chat/${chatId}`);
+            }}
+            onSendToChat={(text) => setExternalMessage(text)}
+            initialPage={citationPage}
+            highlightText={citationText}
+          />
         </div>
-      )}
+      ) : showMindMap ? (
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 relative">
+          <button
+            type="button"
+            onClick={() => setShowMindMap(false)}
+            aria-label="Close mind map"
+            className="absolute top-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/80 backdrop-blur hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <MindMap
+            workspaceId={id}
+            user={user}
+            onLeafClick={(label) => {
+              setExternalMessage(`Summarize: ${label}`);
+            }}
+          />
+        </div>
+      ) : null}
 
       {/* Summary Dialog */}
       <Dialog open={!!summaryDialogFile} onOpenChange={() => setSummaryDialogFile(null)}>
@@ -185,7 +220,7 @@ export default function WorkspaceChatPage() {
           <DialogHeader>
             <DialogTitle>Text Processing Complete</DialogTitle>
             <DialogDescription>
-              Text processing has finished for "{summaryDialogFile?.originalName}".
+              Text processing has finished for &quot;{summaryDialogFile?.originalName}&quot;.
               Would you like to generate an initial summary of this document?
             </DialogDescription>
           </DialogHeader>

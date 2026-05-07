@@ -1,8 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-
-import { getFirestore, collection } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getFirestore, collection, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 const clientCredentials = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,6 +17,14 @@ const app = initializeApp(clientCredentials);
 export const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+if (
+    typeof window !== "undefined" &&
+    process.env.NEXT_PUBLIC_USE_EMULATORS === "true"
+) {
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    connectStorageEmulator(storage, "127.0.0.1", 9199);
+}
 
 const postsCollection = collection(db, "posts");
 const commentsCollection = collection(db, "comments");

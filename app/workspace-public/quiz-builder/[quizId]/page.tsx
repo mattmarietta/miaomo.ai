@@ -11,7 +11,6 @@ import {
   updateQuiz,
   generateId,
 } from "@/lib/firebase/quizStore";
-import { generateQuestionsFromText } from "@/lib/aiQuizGenerator";
 import { ArrowLeft, Play, Sparkles, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 
 type PageProps = {
@@ -56,7 +55,7 @@ export default function QuizEditorPage({ params }: PageProps) {
       try {
         const data = await getQuiz(quizId);
         if (!data || data.userId !== user.uid) {
-          router.replace("/workspace/quiz-builder");
+          router.replace("/workspace-public/quiz-builder");
           return;
         }
         setQuiz(data);
@@ -163,7 +162,14 @@ export default function QuizEditorPage({ params }: PageProps) {
     
     setGenerating(true);
     try {
-      const newQs = await generateQuestionsFromText(aiText, aiCount, types);
+      const token = await user!.getIdToken();
+      const res = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: aiText, count: aiCount, types }),
+      });
+      if (!res.ok) throw new Error("Generation failed");
+      const { questions: newQs } = await res.json();
       const updated = { ...quiz, questions: [...quiz.questions, ...newQs] };
       setQuiz(updated);
       await save(updated);
@@ -205,7 +211,7 @@ export default function QuizEditorPage({ params }: PageProps) {
       <header className="border-b border-border sticky top-0 bg-background z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
-            onClick={() => router.push("/workspace/quiz-builder")}
+            onClick={() => router.push("/workspace-public/quiz-builder")}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft size={20} />
@@ -217,7 +223,7 @@ export default function QuizEditorPage({ params }: PageProps) {
             </span>
             {quiz.questions.length > 0 && (
               <button
-                onClick={() => router.push(`/workspace/quiz-builder/${quiz.id}/take`)}
+                onClick={() => router.push(`/workspace-public/quiz-builder/${quiz.id}/take`)}
                 className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg font-medium text-sm hover:opacity-90 transition-opacity"
               >
                 <Play size={16} />

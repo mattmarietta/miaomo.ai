@@ -80,10 +80,8 @@ export default function Chat() {
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrError, setOcrError] = useState<string | null>(null);
 
-    function guessMimeType(file: File): string {
-        if (file.type) return file.type;
-
-        const name = file.name.toLowerCase();
+    function guessMimeType(fileName: string): string {
+        const name = fileName.toLowerCase();
 
         if (name.endsWith(".pdf")) return "application/pdf";
         if (name.endsWith(".png")) return "image/png";
@@ -96,20 +94,14 @@ export default function Chat() {
         return "";
     }
 
-    const handleUpload = async ({
-        file,
-        downloadUrl,
-    }: {
-        file: File;
-        downloadUrl: string;
-    }) => {
+    const handleUpload = async (downloadUrl: string, fileName: string) => {
         setUploadedFileUrl(downloadUrl);
         setOcrError(null);
         setOcrLoading(true);
         setOcrResult(null);
 
         try {
-            const mimeTypeToSend = guessMimeType(file);
+            const mimeTypeToSend = guessMimeType(fileName);
 
             const res = await fetch("/api/ocr/url", {
                 method: "POST",
@@ -151,7 +143,7 @@ export default function Chat() {
                 {/* Bottom Section */}
                 <div className="h-24 shrink-0 border-t border-border/50 bg-background/50 flex items-center justify-center">
                         {/* Uploader */}
-                        <FileUploader onUpload={handleUpload} />
+                        <FileUploader onUploadComplete={handleUpload} />
                 </div>
             </div>
 
