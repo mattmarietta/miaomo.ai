@@ -26,7 +26,6 @@ import { User } from "firebase/auth";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import {
   ArrowUp,
-  BookOpen,
   Check,
   ChevronDown,
   FileText,
@@ -590,6 +589,17 @@ export function Chat({
                   </Command>
                 </PopoverContent>
               </Popover>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={() => router.push("/workspace-public/quiz-builder")}
+                title="Study Tools"
+              >
+                <GraduationCap size={14} />
+              </Button>
             </div>
 
             <Button

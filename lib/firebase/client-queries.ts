@@ -309,3 +309,81 @@ export async function deleteWorkspace(
 
     await deleteDoc(doc(workspacesCollection, workspaceId));
 }
+
+// ── Study Tools ──
+
+export interface QuizSummary {
+    id: string;
+    title: string;
+    questionCount: number;
+    createdAt: any;
+}
+
+export interface FlashcardDeckSummary {
+    id: string;
+    title: string;
+    cardCount: number;
+    createdAt: any;
+}
+
+export function subscribeQuizzesByUserId(
+    userId: string,
+    onQuizzes: (quizzes: QuizSummary[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const q = query(
+        collection(db, "quizzes"),
+        where("userId", "==", userId),
+    );
+    return onSnapshot(q, (snap) => {
+        const quizzes = snap.docs.map((d) => {
+            const data = d.data();
+            return {
+                id: d.id,
+                title: data.title || "Untitled Quiz",
+                questionCount: Array.isArray(data.questions) ? data.questions.length : 0,
+                createdAt: data.createdAt,
+            };
+        });
+        quizzes.sort((a, b) => {
+            const aMs = a.createdAt?.toMillis?.() ?? 0;
+            const bMs = b.createdAt?.toMillis?.() ?? 0;
+            return bMs - aMs;
+        });
+        onQuizzes(quizzes);
+    }, (err) => {
+        console.error("[subscribeQuizzesByUserId] Firestore error:", err);
+        onError?.(err);
+    });
+}
+
+export function subscribeFlashcardDecksByUserId(
+    userId: string,
+    onDecks: (decks: FlashcardDeckSummary[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const q = query(
+        collection(db, "flashcardDecks"),
+        where("userId", "==", userId),
+    );
+    return onSnapshot(q, (snap) => {
+        const decks = snap.docs.map((d) => {
+            const data = d.data();
+            return {
+                id: d.id,
+                title: data.title || "Untitled Deck",
+                cardCount: Array.isArray(data.cards) ? data.cards.length : 0,
+                createdAt: data.createdAt,
+            };
+        });
+        decks.sort((a, b) => {
+            const aMs = a.createdAt?.toMillis?.() ?? 0;
+            const bMs = b.createdAt?.toMillis?.() ?? 0;
+            return bMs - aMs;
+        });
+        onDecks(decks);
+    }, (err) => {
+        console.error("[subscribeFlashcardDecksByUserId] Firestore error:", err);
+        onError?.(err);
+    });
+}

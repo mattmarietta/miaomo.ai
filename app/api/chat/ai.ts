@@ -139,7 +139,7 @@ export const aiAgent = new ToolLoopAgent({
     }),
     createQuiz: tool({
       description:
-        "Create a quiz from the conversation context or document content. Use when the user asks to create a quiz, test their knowledge, or generate practice questions. Saves the quiz and returns a link.",
+        "Create a quiz from document content. IMPORTANT: You MUST call searchDocuments first to get study material, then pass the full search results as the 'content' parameter. Never call this tool without content from a prior searchDocuments call.",
       parameters: z.object({
         title: z.string().describe("A short title for the quiz"),
         content: z.string().describe("The study material or topic to generate questions from. Include as much relevant content as possible from the conversation or document search results."),
@@ -148,12 +148,15 @@ export const aiAgent = new ToolLoopAgent({
       }),
       // @ts-expect-error — ai v6 tool() generic inference issue with ToolLoopAgent
       execute: async (args: Record<string, unknown>) => {
-        const title = (args as any).title || "Quiz";
-        const content = (args as any).content || (args as any).studyMaterial || (args as any).text;
+        console.log("[createQuiz] args keys:", Object.keys(args));
+        console.log("[createQuiz] args:", JSON.stringify(args, null, 2).substring(0, 500));
+        const title = (args as any).title || (args as any).quizTitle || (args as any).name || "Quiz";
+        const rawContent = (args as any).content || (args as any).studyMaterial || (args as any).text || (args as any).questions || (args as any).material || (args as any).context;
+        const content = Array.isArray(rawContent) ? rawContent.join("\n") : rawContent;
         const count = (args as any).questionCount ?? 5;
         const types = (args as any).questionTypes ?? ["multiple-choice", "true-false"];
         if (!content || typeof content !== "string") {
-          return { success: false, message: "No content provided to generate quiz from. Received keys: " + Object.keys(args).join(", ") };
+          return { success: false, message: `No study content provided. You must call searchDocuments first to retrieve content from the user's files, then pass that content as the 'content' parameter. Received keys: ${Object.keys(args).join(", ")}` };
         }
         if (!_currentUserId) {
           return { success: false, message: "Not authenticated." };
@@ -261,7 +264,7 @@ Return ONLY the JSON array.`,
     }),
     createFlashcards: tool({
       description:
-        "Create a flashcard deck from the conversation context or document content. Use when the user asks for flashcards, study cards, or wants to review key terms and definitions. Saves the deck and returns a link.",
+        "Create a flashcard deck from document content. IMPORTANT: You MUST call searchDocuments first to get study material, then pass the full search results as the 'content' parameter. Never call this tool without content from a prior searchDocuments call.",
       parameters: z.object({
         title: z.string().describe("A short title for the flashcard deck"),
         content: z.string().describe("The study material or topic to generate flashcards from. Include as much relevant content as possible."),
@@ -269,11 +272,14 @@ Return ONLY the JSON array.`,
       }),
       // @ts-expect-error — ai v6 tool() generic inference issue with ToolLoopAgent
       execute: async (args: Record<string, unknown>) => {
-        const title = (args as any).title || "Flashcard Deck";
-        const content = (args as any).content || (args as any).studyMaterial || (args as any).text;
+        console.log("[createFlashcards] args keys:", Object.keys(args));
+        console.log("[createFlashcards] args:", JSON.stringify(args, null, 2).substring(0, 500));
+        const title = (args as any).title || (args as any).deckTitle || (args as any).name || "Flashcard Deck";
+        const rawContent = (args as any).content || (args as any).studyMaterial || (args as any).text || (args as any).cards || (args as any).material || (args as any).context;
+        const content = Array.isArray(rawContent) ? rawContent.join("\n") : rawContent;
         const count = (args as any).cardCount ?? 10;
         if (!content || typeof content !== "string") {
-          return { success: false, message: "No content provided to generate flashcards from. Received keys: " + Object.keys(args).join(", ") };
+          return { success: false, message: `No study content provided. You must call searchDocuments first to retrieve content from the user's files, then pass that content as the 'content' parameter. Received keys: ${Object.keys(args).join(", ")}` };
         }
         if (!_currentUserId) {
           return { success: false, message: "Not authenticated." };
