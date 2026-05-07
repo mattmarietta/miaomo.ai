@@ -81,9 +81,8 @@ export const AppSidebarWorkspaceView = ({
             ownerUid: user.uid,
           }, fileId);
 
-          // Check if file type supports OCR
+          const isPdf = file.type.toLowerCase() === "application/pdf";
           const ocrSupportedTypes = [
-            "application/pdf",
             "image/tiff",
             "image/tif",
             "image/gif",
@@ -94,11 +93,47 @@ export const AppSidebarWorkspaceView = ({
             "image/webp",
           ];
 
-          if (ocrSupportedTypes.includes(file.type.toLowerCase())) {
-            // Trigger OCR processing
+          if (isPdf) {
+            // PDFs: skip OCR, go straight to vectorization
+            try {
+              await updateWorkspaceFileStatus(workspaceId, fileId, "indexing");
+              const token = await user.getIdToken();
+              const ingestRes = await fetch(`/api/documents/${fileId}/ingest`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  url,
+                  workspaceId,
+                  source: file.name,
+                }),
+              });
+              if (ingestRes.ok) {
+                const ingestResult = await ingestRes.json();
+                await updateWorkspaceFileStatus(workspaceId, fileId, "done", {
+                  fullText: ingestResult.fullText,
+                  vectorCount: ingestResult.inserted,
+                });
+              } else {
+                const errorData = await ingestRes.json();
+                console.error("Vectorization failed:", errorData.error);
+                await updateWorkspaceFileStatus(workspaceId, fileId, "indexing_failed", {
+                  errorMessage: errorData.error || "Vectorization failed",
+                });
+              }
+            } catch (ingestError) {
+              console.error("Vectorization error:", ingestError);
+              await updateWorkspaceFileStatus(workspaceId, fileId, "indexing_failed", {
+                errorMessage: ingestError instanceof Error ? ingestError.message : "Unknown error",
+              });
+            }
+          } else if (ocrSupportedTypes.includes(file.type.toLowerCase())) {
+            // Images: OCR first, then vectorize
             try {
               await updateWorkspaceFileStatus(workspaceId, fileId, "processing_ocr");
-              
+
               const ocrResponse = await fetch("/api/ocr/url", {
                 method: "POST",
                 headers: {
@@ -112,7 +147,6 @@ export const AppSidebarWorkspaceView = ({
 
               if (ocrResponse.ok) {
                 const ocrResult = await ocrResponse.json();
-                // Store the extracted text and update status
                 await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_completed", {
                   fullText: ocrResult.fullText,
                 });
@@ -190,10 +224,13 @@ export const AppSidebarWorkspaceView = ({
               const getStatusIcon = () => {
                 switch (file.status) {
                   case "processing_ocr":
+                  case "indexing":
                     return <Loader2 className="size-3.5 shrink-0 text-blue-500 animate-spin ml-2" />;
                   case "ocr_completed":
+                  case "done":
                     return <CheckCircle className="size-3.5 shrink-0 text-green-500 ml-2" />;
                   case "ocr_failed":
+                  case "indexing_failed":
                     return <XCircle className="size-3.5 shrink-0 text-red-500 ml-2" />;
                   default:
                     return null;

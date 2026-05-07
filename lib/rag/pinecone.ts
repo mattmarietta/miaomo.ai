@@ -50,14 +50,14 @@ function scaleHybrid(
 }
 
 export async function upsertChunks(params: {
-  userId: string;
+  workspaceId: string;
   docId: string;
   vectors: number[][];
   sparseVectors: SparseVector[];
   chunks: { chunkText: string; chunkIndex: number; source: string; page?: number }[];
 }) {
-  const { userId, docId, vectors, sparseVectors, chunks } = params;
-  const index = getWorkspaceIndex(userId);
+  const { workspaceId, docId, vectors, sparseVectors, chunks } = params;
+  const index = getWorkspaceIndex(workspaceId);
 
   if (sparseVectors.length !== vectors.length) {
     throw new Error(

@@ -6,8 +6,8 @@ const SPARSE_MODEL = "pinecone-sparse-english-v0";
 const PINECONE_EMBED_URL = "https://api.pinecone.io/embed";
 
 export function GetEmbeddingsClient() {
-  const googleKey = process.env.GOOGLE_API_KEY;
-  if (!googleKey) throw new Error("Missing env var: GOOGLE_API_KEY");
+  const googleKey = process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_STUDIO_API_KEY;
+  if (!googleKey) throw new Error("Missing env var: GOOGLE_API_KEY or GOOGLE_AI_STUDIO_API_KEY");
   return new GoogleGenerativeAIEmbeddings({
     apiKey: googleKey,
     model: "gemini-embedding-001",

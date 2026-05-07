@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import { retrieveContext } from "@/lib/rag/retrieve";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { serverDB } from "@/lib/firebase/firebaseServer";
+import { Timestamp, FieldValue } from "firebase-admin/firestore";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
@@ -33,9 +35,9 @@ export function setAgentFiles(files: { id: string; originalName: string }[]) {
 }
 
 let _webSearchMode = false;
-let _selectedModel = "gemini-2.0-flash";
+let _selectedModel = "gemini-3-flash-preview";
 
-const ALLOWED_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"];
+const ALLOWED_MODELS = ["gemini-3-flash-preview", "gemini-3-pro-preview"];
 
 export function setWebSearchMode(enabled: boolean) {
   _webSearchMode = enabled;
@@ -45,7 +47,7 @@ export function setAgentModel(model: string | undefined) {
   if (model && ALLOWED_MODELS.includes(model)) {
     _selectedModel = model;
   } else {
-    _selectedModel = "gemini-2.0-flash";
+    _selectedModel = "gemini-3-flash-preview";
   }
 }
 
@@ -71,10 +73,11 @@ You can also create quizzes and flashcard decks using the createQuiz and createF
 }
 
 export const aiAgent = new ToolLoopAgent({
-  model: google("gemini-2.0-flash"),
+  model: google("gemini-3-flash-preview"),
   get instructions() { return buildInstructions(); },
   stopWhen: stepCountIs(4),
-  prepareCall: () => ({
+  prepareCall: (options) => ({
+    ...options,
     model: google(_selectedModel),
   }),
   tools: {
@@ -136,7 +139,7 @@ export const aiAgent = new ToolLoopAgent({
     }),
     createQuiz: tool({
       description:
-        "Create a quiz from the conversation context or document content. Use when the user asks to create a quiz, test their knowledge, or generate practice questions. Returns quiz data that the user can click to start.",
+        "Create a quiz from the conversation context or document content. Use when the user asks to create a quiz, test their knowledge, or generate practice questions. Saves the quiz and returns a link.",
       parameters: z.object({
         title: z.string().describe("A short title for the quiz"),
         content: z.string().describe("The study material or topic to generate questions from. Include as much relevant content as possible from the conversation or document search results."),
@@ -146,11 +149,14 @@ export const aiAgent = new ToolLoopAgent({
       // @ts-expect-error — ai v6 tool() generic inference issue with ToolLoopAgent
       execute: async (args: Record<string, unknown>) => {
         const title = (args as any).title || "Quiz";
-        const content = (args as any).content;
+        const content = (args as any).content || (args as any).studyMaterial || (args as any).text;
         const count = (args as any).questionCount ?? 5;
         const types = (args as any).questionTypes ?? ["multiple-choice", "true-false"];
         if (!content || typeof content !== "string") {
-          return { success: false, message: "No content provided to generate quiz from." };
+          return { success: false, message: "No content provided to generate quiz from. Received keys: " + Object.keys(args).join(", ") };
+        }
+        if (!_currentUserId) {
+          return { success: false, message: "Not authenticated." };
         }
         try {
           const typeInstructions = (types as string[]).map((t: string) => {
@@ -164,7 +170,7 @@ export const aiAgent = new ToolLoopAgent({
           }).filter(Boolean).join("\n");
 
           const { text } = await generateText({
-            model: google("gemini-2.0-flash"),
+            model: google("gemini-3-flash-preview"),
             prompt: `Create exactly ${count} quiz questions from this study material.
 Use ONLY these question types: ${(types as string[]).join(", ")}
 
@@ -194,14 +200,58 @@ Return ONLY the JSON array.`,
             if (arrayMatch) jsonStr = arrayMatch[0];
           }
 
-          const questions = JSON.parse(jsonStr);
+          const rawQuestions = JSON.parse(jsonStr);
+          const genId = () => Math.random().toString(36).substring(2, 15);
+
+          const questions = rawQuestions.map((aq: any) => {
+            const q: any = {
+              id: genId(),
+              type: aq.type,
+              question: aq.question || "",
+              correctAnswer: aq.correctAnswer || "",
+              points: 1,
+              box: 1,
+            };
+            if (aq.explanation) q.explanation = aq.explanation;
+            if (aq.type === "multiple-choice" && aq.options) {
+              q.options = aq.options.map((text: string) => ({ id: genId(), text }));
+              const correctIndex = aq.options.findIndex((opt: string) => opt === aq.correctAnswer);
+              if (correctIndex >= 0 && q.options[correctIndex]) {
+                q.correctAnswer = q.options[correctIndex].id;
+              } else {
+                const letterIndex = ["A", "B", "C", "D"].indexOf(aq.correctAnswer || "");
+                if (letterIndex >= 0 && q.options[letterIndex]) {
+                  q.correctAnswer = q.options[letterIndex].id;
+                }
+              }
+            }
+            if (aq.type === "matching" && aq.matchingPairs) {
+              q.matchingPairs = aq.matchingPairs.map((p: any) => ({
+                id: genId(), term: p.term, definition: p.definition,
+              }));
+              q.points = aq.matchingPairs.length;
+            }
+            return q;
+          });
+
+          const now = Timestamp.now();
+          const docRef = await serverDB.collection("quizzes").add({
+            userId: _currentUserId,
+            title,
+            description: `Generated ${questions.length} questions`,
+            questions,
+            createdAt: now,
+            updatedAt: now,
+          });
+
           return {
             success: true,
             type: "quiz",
             title,
-            description: `Generated ${questions.length} questions`,
-            questions,
             questionCount: questions.length,
+            quizId: docRef.id,
+            link: `/workspace-public/quiz-builder/${docRef.id}`,
+            takeLink: `/workspace-public/quiz-builder/${docRef.id}/take`,
           };
         } catch (err) {
           console.error("createQuiz error:", err);
@@ -211,7 +261,7 @@ Return ONLY the JSON array.`,
     }),
     createFlashcards: tool({
       description:
-        "Create a flashcard deck from the conversation context or document content. Use when the user asks for flashcards, study cards, or wants to review key terms and definitions.",
+        "Create a flashcard deck from the conversation context or document content. Use when the user asks for flashcards, study cards, or wants to review key terms and definitions. Saves the deck and returns a link.",
       parameters: z.object({
         title: z.string().describe("A short title for the flashcard deck"),
         content: z.string().describe("The study material or topic to generate flashcards from. Include as much relevant content as possible."),
@@ -220,14 +270,17 @@ Return ONLY the JSON array.`,
       // @ts-expect-error — ai v6 tool() generic inference issue with ToolLoopAgent
       execute: async (args: Record<string, unknown>) => {
         const title = (args as any).title || "Flashcard Deck";
-        const content = (args as any).content;
+        const content = (args as any).content || (args as any).studyMaterial || (args as any).text;
         const count = (args as any).cardCount ?? 10;
         if (!content || typeof content !== "string") {
-          return { success: false, message: "No content provided to generate flashcards from." };
+          return { success: false, message: "No content provided to generate flashcards from. Received keys: " + Object.keys(args).join(", ") };
+        }
+        if (!_currentUserId) {
+          return { success: false, message: "Not authenticated." };
         }
         try {
           const { text } = await generateText({
-            model: google("gemini-2.0-flash"),
+            model: google("gemini-3-flash-preview"),
             prompt: `Extract ${count} key terms and definitions from this text. Return as JSON array.
 
 Text:
@@ -251,14 +304,36 @@ Return ONLY a JSON array like this, no other text:
             if (arrayMatch) jsonStr = arrayMatch[0];
           }
 
-          const cards = JSON.parse(jsonStr);
+          const genId = () => Math.random().toString(36).substring(2, 15);
+          const rawCards = JSON.parse(jsonStr);
+          const cards = rawCards.map((c: any) => ({
+            id: genId(),
+            front: c.front,
+            back: c.back,
+            interval: 0,
+            repetition: 0,
+            efactor: 2.5,
+            dueDate: new Date().toISOString(),
+          }));
+
+          const now = Timestamp.now();
+          const docRef = await serverDB.collection("flashcardDecks").add({
+            userId: _currentUserId,
+            title,
+            description: `Generated ${cards.length} flashcards`,
+            cards,
+            createdAt: now,
+            updatedAt: now,
+          });
+
           return {
             success: true,
             type: "flashcards",
             title,
-            description: `Generated ${cards.length} flashcards`,
-            cards,
             cardCount: cards.length,
+            deckId: docRef.id,
+            link: `/workspace-public/quiz-builder/flashcards/${docRef.id}`,
+            studyLink: `/workspace-public/quiz-builder/flashcards/${docRef.id}/study`,
           };
         } catch (err) {
           console.error("createFlashcards error:", err);
@@ -281,7 +356,7 @@ Return ONLY a JSON array like this, no other text:
         }
         try {
           const { text } = await generateText({
-            model: google("gemini-2.0-flash"),
+            model: google("gemini-3-flash-preview"),
             tools: { google_search: googleSearchTool as any },
             prompt: query,
           });
@@ -307,7 +382,7 @@ export async function generateTitleFromUserMessage({
   "use server";
   try {
     const { text } = await generateText({
-      model: google("gemini-flash-latest"),
+      model: google("gemini-3-flash-preview"),
       system: `
       - you will generate a short title based on the first message a user begins a conversation with
       - ensure it is not more than 70 characters long
