@@ -26,6 +26,8 @@ import { User } from "firebase/auth";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import {
   ArrowUp,
+  Book,
+  BookOpen,
   Check,
   ChevronDown,
   FileText,
@@ -662,6 +664,7 @@ export function Chat({
             onClick={() => router.push("/workspace-public/quiz-builder")}
             className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-muted"
           >
+            <BookOpen size={16} />
             Study Tools
           </button>
           {onToggleMindMap && (
@@ -1157,6 +1160,7 @@ export function Chat({
         <button
           onClick={() => router.push("/workspace-public/quiz-builder")}
           className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-muted">
+            <BookOpen size={16} />
           Study Tools
         </button>
         {onToggleMindMap && (
