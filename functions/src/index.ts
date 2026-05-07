@@ -175,24 +175,26 @@ export const onUploadFinalized = onObjectFinalized(
       );
 
       console.log("[INGEST] done", {workspaceId, fileId});
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[INGEST] FATAL error", {
         workspaceId,
         fileId,
-        message: err?.message,
-        stack: err?.stack,
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
       });
       try {
         await ref.set(
           {
             status: "error",
-            errorMessage: err?.message ? String(err.message) : "Unknown ingestion error",
+            errorMessage: err instanceof Error ? err.message : "Unknown ingestion error",
             updatedAt: FieldValue.serverTimestamp(),
           },
           {merge: true}
         );
-      } catch (fsErr: any) {
-        console.error("[INGEST] failed to write error status to Firestore", {message: fsErr?.message});
+      } catch (fsErr: unknown) {
+        console.error("[INGEST] failed to write error status to Firestore", {
+          message: fsErr instanceof Error ? fsErr.message : String(fsErr),
+        });
       }
       throw err;
     }
@@ -235,8 +237,12 @@ export const onFileDeleted = onObjectDeleted(
 
       await ref.delete();
       console.log("[DELETE] removed Firestore document", {workspaceId, fileId});
-    } catch (err: any) {
-      console.error("[DELETE] error during cleanup", {workspaceId, fileId, message: err?.message});
+    } catch (err: unknown) {
+      console.error("[DELETE] error during cleanup", {
+        workspaceId,
+        fileId,
+        message: err instanceof Error ? err.message : String(err),
+      });
       // Don't rethrow — a failed cleanup shouldn't block the Storage deletion
     }
   }

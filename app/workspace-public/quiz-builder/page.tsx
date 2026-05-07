@@ -409,7 +409,8 @@ export default function StudyToolsPage() {
             {quizzes.length === 0 ? (
               <div className="flex flex-col items-center py-16">
                 <FileText size={40} className="text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground">No quizzes yet</p>
+                <p className="text-muted-foreground font-medium">No quizzes yet</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">Create your first quiz from your uploaded files</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -464,7 +465,8 @@ export default function StudyToolsPage() {
             {decks.length === 0 ? (
               <div className="flex flex-col items-center py-16">
                 <Layers size={40} className="text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground">No flashcard decks yet</p>
+                <p className="text-muted-foreground font-medium">No flashcard decks yet</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">Create your first deck from your uploaded files</p>
               </div>
             ) : (
               <div className="space-y-2">

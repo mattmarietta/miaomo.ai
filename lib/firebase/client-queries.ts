@@ -1,5 +1,6 @@
-import { db } from "@/lib/firebase/firebase";
+import { db, storage } from "@/lib/firebase/firebase";
 import { collection, doc, setDoc, deleteDoc, Timestamp, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
+import { deleteObject, ref as storageRef } from "firebase/storage";
 import { DBChatSchema, DBMessageSchema, DBWorkspaceSchema, DBWorkspaceFileSchema, DBHighlightSchema } from "@/lib/firebase/schema";
 
 
@@ -264,4 +265,47 @@ export async function getMessagesByChatId(chatId: string) {
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as DBMessageSchema & { id: string }));
+}
+
+// ── File deletion ──
+// Deletes from Storage (triggers Cloud Function → Pinecone cleanup for PDFs)
+// and removes the Firestore doc directly (covers non-PDF files and acts as backup).
+export async function deleteWorkspaceFile(
+    workspaceId: string,
+    fileId: string,
+    storagePath: string,
+): Promise<void> {
+    try {
+        await deleteObject(storageRef(storage, storagePath));
+    } catch (err) {
+        console.error("[deleteWorkspaceFile] Storage delete error (continuing):", err);
+    }
+    await deleteDoc(doc(db, "workspaces", workspaceId, "files", fileId));
+}
+
+// ── Workspace deletion ──
+// Deletes all files from Storage (triggers Cloud Function for Pinecone cleanup),
+// removes all file Firestore docs, then removes the workspace document itself.
+export async function deleteWorkspace(
+    workspaceId: string,
+    userId: string,
+): Promise<void> {
+    const filesCol = collection(db, "workspaces", workspaceId, "files");
+    const filesSnap = await getDocs(query(filesCol, where("ownerUid", "==", userId)));
+
+    await Promise.all(
+        filesSnap.docs.map(async (fileDocSnap) => {
+            const fileData = fileDocSnap.data() as DBWorkspaceFileSchema;
+            if (fileData.storagePath) {
+                try {
+                    await deleteObject(storageRef(storage, fileData.storagePath));
+                } catch (err) {
+                    console.error("[deleteWorkspace] Storage delete error (continuing):", err);
+                }
+            }
+            await deleteDoc(fileDocSnap.ref);
+        }),
+    );
+
+    await deleteDoc(doc(workspacesCollection, workspaceId));
 }

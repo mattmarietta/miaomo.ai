@@ -11,6 +11,7 @@ import {
 import {
   subscribeWorkspaceFiles,
   subscribeWorkspaceChats,
+  deleteWorkspaceFile,
 } from "@/lib/firebase/client-queries";
 import { DBWorkspaceFileSchema, DBChatSchema } from "@/lib/firebase/schema";
 import {
@@ -18,10 +19,10 @@ import {
   MessageSquare,
   ArrowLeft,
   Plus,
-  Paperclip,
   Loader2,
   CheckCircle,
   XCircle,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -41,6 +42,8 @@ export const AppSidebarWorkspaceView = ({
   const pathname = usePathname();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<DBWorkspaceFileSchema | null>(null);
+  const [deletingFile, setDeletingFile] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -173,6 +176,19 @@ export const AppSidebarWorkspaceView = ({
     );
   };
 
+  const handleConfirmFileDelete = async () => {
+    if (!fileToDelete) return;
+    setDeletingFile(true);
+    try {
+      await deleteWorkspaceFile(workspaceId, fileToDelete.id, fileToDelete.storagePath);
+    } catch (err) {
+      console.error("Failed to delete file:", err);
+    } finally {
+      setDeletingFile(false);
+      setFileToDelete(null);
+    }
+  };
+
   return (
     <>
       {/* Back to dashboard */}
@@ -213,7 +229,6 @@ export const AppSidebarWorkspaceView = ({
             {files.map((file) => {
               const isPdf = file.mimeType === "application/pdf";
               const fileUrl = (file as any).downloadUrl;
-              // Build URL with file query param so workspace page can show it
               const href =
                 isPdf && fileUrl
                   ? pathname.includes("/chat/")
@@ -225,31 +240,42 @@ export const AppSidebarWorkspaceView = ({
                 switch (file.status) {
                   case "processing_ocr":
                   case "indexing":
-                    return <Loader2 className="size-3.5 shrink-0 text-blue-500 animate-spin ml-2" />;
+                    return <Loader2 className="size-3.5 shrink-0 text-blue-500 animate-spin" />;
                   case "ocr_completed":
                   case "done":
-                    return <CheckCircle className="size-3.5 shrink-0 text-green-500 ml-2" />;
+                    return <CheckCircle className="size-3.5 shrink-0 text-green-500" />;
                   case "ocr_failed":
                   case "indexing_failed":
-                    return <XCircle className="size-3.5 shrink-0 text-red-500 ml-2" />;
+                    return <XCircle className="size-3.5 shrink-0 text-red-500" />;
                   default:
                     return null;
                 }
               };
 
               return (
-                <SidebarMenuItem key={file.id}>
-                  <SidebarMenuButton asChild className="gap-2" size="sm">
-                    <Link href={href} className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                <SidebarMenuItem key={file.id} className="group/file">
+                  <div className="relative flex items-center w-full">
+                    <SidebarMenuButton asChild className="gap-2 flex-1 pr-7" size="sm">
+                      <Link href={href}>
                         <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="truncate text-sm">
                           {file.originalName || "Untitled"}
                         </span>
-                      </div>
-                      {getStatusIcon()}
-                    </Link>
-                  </SidebarMenuButton>
+                        <span className="ml-auto shrink-0">{getStatusIcon()}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFileToDelete(file);
+                      }}
+                      className="absolute right-1 opacity-0 group-hover/file:opacity-100 transition-opacity p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-red-500"
+                      aria-label={`Delete ${file.originalName}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 </SidebarMenuItem>
               );
             })}
@@ -270,6 +296,36 @@ export const AppSidebarWorkspaceView = ({
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
+
+      {/* File delete confirmation modal */}
+      {fileToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100]">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-base font-semibold text-foreground mb-2">
+              Delete this file?
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              This cannot be undone. &ldquo;{fileToDelete.originalName}&rdquo; and all its indexed data will be permanently removed.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setFileToDelete(null)}
+                disabled={deletingFile}
+                className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmFileDelete}
+                disabled={deletingFile}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deletingFile ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chats */}
       <SidebarGroup>

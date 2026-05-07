@@ -619,12 +619,18 @@ export function Chat({
 
   const hasMessages = messages.length > 0;
 
-  // ── Empty state (Claude.ai style) ──
+  // ── Empty state ──
   if (!hasMessages) {
     return (
       <div className="flex flex-col h-full min-h-0 bg-background">
         <div className="flex-1 flex flex-col items-center justify-center px-4">
           <div className="w-full max-w-2xl flex flex-col items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/cat-redone.gif"
+              alt="Cat rolling a ball of yarn"
+              className="max-w-[200px] w-full mb-4 rounded-xl"
+            />
             <h1 className="text-2xl font-semibold text-foreground mb-1">
               What do you need help with?
             </h1>
