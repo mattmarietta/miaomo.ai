@@ -334,10 +334,9 @@ export function subscribeQuizzesByUserId(
     const q = query(
         collection(db, "quizzes"),
         where("userId", "==", userId),
-        orderBy("createdAt", "desc"),
     );
     return onSnapshot(q, (snap) => {
-        onQuizzes(snap.docs.map((d) => {
+        const quizzes = snap.docs.map((d) => {
             const data = d.data();
             return {
                 id: d.id,
@@ -345,8 +344,17 @@ export function subscribeQuizzesByUserId(
                 questionCount: Array.isArray(data.questions) ? data.questions.length : 0,
                 createdAt: data.createdAt,
             };
-        }));
-    }, (err) => onError?.(err));
+        });
+        quizzes.sort((a, b) => {
+            const aMs = a.createdAt?.toMillis?.() ?? 0;
+            const bMs = b.createdAt?.toMillis?.() ?? 0;
+            return bMs - aMs;
+        });
+        onQuizzes(quizzes);
+    }, (err) => {
+        console.error("[subscribeQuizzesByUserId] Firestore error:", err);
+        onError?.(err);
+    });
 }
 
 export function subscribeFlashcardDecksByUserId(
@@ -357,10 +365,9 @@ export function subscribeFlashcardDecksByUserId(
     const q = query(
         collection(db, "flashcardDecks"),
         where("userId", "==", userId),
-        orderBy("createdAt", "desc"),
     );
     return onSnapshot(q, (snap) => {
-        onDecks(snap.docs.map((d) => {
+        const decks = snap.docs.map((d) => {
             const data = d.data();
             return {
                 id: d.id,
@@ -368,6 +375,15 @@ export function subscribeFlashcardDecksByUserId(
                 cardCount: Array.isArray(data.cards) ? data.cards.length : 0,
                 createdAt: data.createdAt,
             };
-        }));
-    }, (err) => onError?.(err));
+        });
+        decks.sort((a, b) => {
+            const aMs = a.createdAt?.toMillis?.() ?? 0;
+            const bMs = b.createdAt?.toMillis?.() ?? 0;
+            return bMs - aMs;
+        });
+        onDecks(decks);
+    }, (err) => {
+        console.error("[subscribeFlashcardDecksByUserId] Firestore error:", err);
+        onError?.(err);
+    });
 }
