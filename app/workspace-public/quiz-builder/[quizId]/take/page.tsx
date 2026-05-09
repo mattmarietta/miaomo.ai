@@ -52,7 +52,7 @@ export default function TakeQuizPage({ params }: PageProps) {
       try {
         const data = await getQuiz(quizId);
         if (!data) {
-          router.replace("/workspace/quiz-builder");
+          router.replace("/workspace-public/quiz-builder");
           return;
         }
         setQuiz(data);
@@ -174,7 +174,7 @@ export default function TakeQuizPage({ params }: PageProps) {
         <div className="text-center">
           <p className="text-muted-foreground mb-4">No questions in this study set</p>
           <button
-            onClick={() => router.push(`/workspace/quiz-builder/${quizId}`)}
+            onClick={() => router.push(`/workspace-public/quiz-builder/${quizId}`)}
             className="text-violet-400 hover:text-violet-300"
           >
             Go back to edit
@@ -223,7 +223,7 @@ export default function TakeQuizPage({ params }: PageProps) {
                 Retake
               </button>
               <button
-                onClick={() => router.push("/workspace/quiz-builder")}
+                onClick={() => router.push("/workspace-public/quiz-builder")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-foreground text-background rounded-lg font-medium text-sm hover:opacity-90 transition-opacity"
               >
                 Done
@@ -362,7 +362,7 @@ export default function TakeQuizPage({ params }: PageProps) {
           <button
             onClick={() => {
               if (confirm("Exit test? Your progress will be lost.")) {
-                router.push(`/workspace/quiz-builder/${quizId}`);
+                router.push(`/workspace-public/quiz-builder/${quizId}`);
               }
             }}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"

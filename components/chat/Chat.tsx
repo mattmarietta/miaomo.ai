@@ -313,7 +313,7 @@ export function Chat({ user, initialMessages, workspaceId, files = [], onFileCli
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 rounded-full text-xs gap-1.5"
-                                onClick={() => router.push("/workspace/quiz-builder")}
+                                onClick={() => router.push("/workspace-public/quiz-builder")}
                             >
                                 <BookOpen size={14} />
                                 Study Tools

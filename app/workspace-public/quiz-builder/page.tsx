@@ -98,7 +98,7 @@ export default function StudyToolsPage() {
     setCreating(true);
     try {
       const quiz = await createQuiz(user.uid, newTitle.trim(), newDesc.trim());
-      router.push(`/workspace/quiz-builder/${quiz.id}`);
+      router.push(`/workspace-public/quiz-builder/${quiz.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to create quiz");
@@ -137,7 +137,7 @@ export default function StudyToolsPage() {
       setGeneratingStatus("Saving...");
       await updateQuiz(quiz.id, { questions });
       
-      router.push(`/workspace/quiz-builder/${quiz.id}`);
+      router.push(`/workspace-public/quiz-builder/${quiz.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to generate. Please try again.");
@@ -152,7 +152,7 @@ export default function StudyToolsPage() {
     setCreating(true);
     try {
       const deck = await createDeck(user.uid, deckTitle.trim(), deckDesc.trim());
-      router.push(`/workspace/quiz-builder/flashcards/${deck.id}`);
+      router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to create deck");
@@ -184,7 +184,7 @@ export default function StudyToolsPage() {
       setGeneratingStatus("Saving...");
       await updateDeck(deck.id, { cards });
 
-      router.push(`/workspace/quiz-builder/flashcards/${deck.id}`);
+      router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`);
     } catch (err) {
       console.error(err);
       alert("Failed to generate deck. Please try again.");
@@ -332,7 +332,7 @@ export default function StudyToolsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <button onClick={() => router.push("/workspace")} className="p-2 hover:bg-muted rounded-lg">
+          <button onClick={() => router.push("/workspace-public")} className="p-2 hover:bg-muted rounded-lg">
             <ArrowLeft size={20} className="text-muted-foreground" />
           </button>
           <div>
@@ -386,7 +386,7 @@ export default function StudyToolsPage() {
                 {quizzes.map(quiz => (
                   <div
                     key={quiz.id}
-                    onClick={() => router.push(`/workspace/quiz-builder/${quiz.id}`)}
+                    onClick={() => router.push(`/workspace-public/quiz-builder/${quiz.id}`)}
                     className="flex items-center justify-between p-4 bg-card border border-border rounded-xl cursor-pointer hover:bg-muted/50 group"
                   >
                     <div className="flex items-center gap-4">
@@ -403,7 +403,7 @@ export default function StudyToolsPage() {
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
                       {quiz.questions.length > 0 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace/quiz-builder/${quiz.id}/take`); }}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace-public/quiz-builder/${quiz.id}/take`); }}
                           className="p-2 hover:bg-muted rounded-lg"
                         >
                           <Play size={18} className="text-muted-foreground" />
@@ -441,7 +441,7 @@ export default function StudyToolsPage() {
                 {decks.map(deck => (
                   <div
                     key={deck.id}
-                    onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deck.id}`)}
+                    onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`)}
                     className="flex items-center justify-between p-4 bg-card border border-border rounded-xl cursor-pointer hover:bg-muted/50 group"
                   >
                     <div className="flex items-center gap-4">
@@ -458,7 +458,7 @@ export default function StudyToolsPage() {
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
                       {deck.cards.length > 0 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace/quiz-builder/flashcards/${deck.id}/study`); }}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}/study`); }}
                           className="p-2 hover:bg-muted rounded-lg"
                         >
                           <Play size={18} className="text-muted-foreground" />

@@ -64,7 +64,7 @@ export default function LearnPage() {
         const data = await getDeck(deckId);
         if (!data || data.cards.length < 2) {
           // Need at least 2 cards for multiple choice to make any sense
-          router.replace(`/workspace/quiz-builder/flashcards/${deckId}`);
+          router.replace(`/workspace-public/quiz-builder/flashcards/${deckId}`);
           return;
         }
         setDeck(data);
@@ -195,7 +195,7 @@ export default function LearnPage() {
         </p>
         <div className="flex gap-3">
           <button
-            onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}`)}
+            onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}`)}
             className="px-6 py-3 border border-border rounded-lg text-sm hover:bg-muted"
           >
             Back to Deck
@@ -223,7 +223,7 @@ export default function LearnPage() {
       <header className="border-b border-border">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
-            onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}`)}
+            onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}`)}
             className="p-2 hover:bg-muted rounded-lg"
           >
             <ArrowLeft size={20} className="text-muted-foreground" />

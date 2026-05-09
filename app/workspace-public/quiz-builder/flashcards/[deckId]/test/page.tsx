@@ -131,7 +131,7 @@ export default function TestFromDeckPage() {
       try {
         const data = await getDeck(deckId);
         if (!data || data.cards.length < 2) {
-          router.replace(`/workspace/quiz-builder/flashcards/${deckId}`);
+          router.replace(`/workspace-public/quiz-builder/flashcards/${deckId}`);
           return;
         }
         setDeck(data);
@@ -202,7 +202,7 @@ export default function TestFromDeckPage() {
         <header className="border-b border-border">
           <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-4">
             <button
-              onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}`)}
+              onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}`)}
               className="p-2 hover:bg-muted rounded-lg"
             >
               <ArrowLeft size={20} className="text-muted-foreground" />
@@ -436,7 +436,7 @@ export default function TestFromDeckPage() {
               New Test
             </button>
             <button
-              onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}`)}
+              onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}`)}
               className="px-5 py-2.5 bg-foreground text-background rounded-lg text-sm font-medium"
             >
               Done

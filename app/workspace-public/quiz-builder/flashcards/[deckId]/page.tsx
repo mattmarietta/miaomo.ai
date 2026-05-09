@@ -45,7 +45,7 @@ export default function DeckEditorPage() {
       try {
         const data = await getDeck(deckId);
         if (!data) {
-          router.replace("/workspace/quiz-builder");
+          router.replace("/workspace-public/quiz-builder");
           return;
         }
         setDeck(data);
@@ -155,7 +155,7 @@ export default function DeckEditorPage() {
       {/* Slim header — just back, title, save indicator */}
       <header className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <button onClick={() => router.push("/workspace/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
+          <button onClick={() => router.push("/workspace-public/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
             <ArrowLeft size={20} className="text-muted-foreground" />
           </button>
           <div className="flex-1 min-w-0">
@@ -177,7 +177,7 @@ export default function DeckEditorPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
-                onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}/study`)}
+                onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}/study`)}
                 className="group flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors text-left"
               >
                 <div className="w-10 h-10 rounded-lg bg-foreground/10 flex items-center justify-center flex-shrink-0">
@@ -190,7 +190,7 @@ export default function DeckEditorPage() {
               </button>
 
               <button
-                onClick={() => deck.cards.length >= 2 && router.push(`/workspace/quiz-builder/flashcards/${deckId}/learn`)}
+                onClick={() => deck.cards.length >= 2 && router.push(`/workspace-public/quiz-builder/flashcards/${deckId}/learn`)}
                 disabled={deck.cards.length < 2}
                 className="group flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-card"
               >
@@ -204,7 +204,7 @@ export default function DeckEditorPage() {
               </button>
 
               <button
-                onClick={() => deck.cards.length >= 2 && router.push(`/workspace/quiz-builder/flashcards/${deckId}/test`)}
+                onClick={() => deck.cards.length >= 2 && router.push(`/workspace-public/quiz-builder/flashcards/${deckId}/test`)}
                 disabled={deck.cards.length < 2}
                 className="group flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-card"
               >
