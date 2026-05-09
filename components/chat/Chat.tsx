@@ -32,7 +32,7 @@ interface ChatProps {
     onFileClick?: (file: DBWorkspaceFileSchema) => void;
 }
 
-export function Chat({ user, initialMessages, workspaceId, files = [], onFileClick }: ChatProps) {
+export function Chat({ user, initialMessages, workspaceId, files = [] }: ChatProps) {
     const router = useRouter();
     const { messages, sendMessage, status } = useChat<ChatAgent>({
         transport: new DefaultChatTransport({
