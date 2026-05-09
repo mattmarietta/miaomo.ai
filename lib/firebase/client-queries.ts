@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, doc, setDoc, Timestamp, query, where, onSnapshot } from "firebase/firestore";
-import { DBChatSchema, DBWorkspaceSchema, DBWorkspaceFileSchema } from "@/lib/firebase/schema";
+import { collection, doc, setDoc, deleteDoc, Timestamp, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
+import { DBChatSchema, DBMessageSchema, DBWorkspaceSchema, DBWorkspaceFileSchema, DBHighlightSchema } from "@/lib/firebase/schema";
 
 
 // ── Workspaces ──
@@ -50,6 +50,11 @@ export function subscribeWorkspacesByUserId(
     );
 }
 
+export function generateWorkspaceFileId(workspaceId: string): string {
+    const filesCol = collection(db, "workspaces", workspaceId, "files");
+    return doc(filesCol).id;
+}
+
 export async function addWorkspaceFile(
     workspaceId: string,
     fileData: {
@@ -60,9 +65,10 @@ export async function addWorkspaceFile(
         downloadUrl: string;
         ownerUid: string;
     },
+    fileId?: string,
 ) {
     const filesCol = collection(db, "workspaces", workspaceId, "files");
-    const ref = doc(filesCol);
+    const ref = fileId ? doc(filesCol, fileId) : doc(filesCol);
     await setDoc(ref, {
         id: ref.id,
         originalName: fileData.originalName,
@@ -71,8 +77,8 @@ export async function addWorkspaceFile(
         storagePath: fileData.storagePath,
         downloadUrl: fileData.downloadUrl,
         ownerUid: fileData.ownerUid,
-        workspaceID: workspaceId,
-        status: "uploaded",
+        workspaceId: workspaceId,
+        status: "pending",
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
     });
@@ -107,6 +113,91 @@ export function subscribeWorkspaceFiles(
     );
 }
 
+export async function updateWorkspaceFileStatus(
+    workspaceId: string,
+    fileId: string,
+    status: string,
+    additionalData?: Partial<DBWorkspaceFileSchema>
+) {
+    const fileDoc = doc(db, "workspaces", workspaceId, "files", fileId);
+    await setDoc(fileDoc, {
+        status,
+        updatedAt: Timestamp.now(),
+        ...additionalData,
+    }, { merge: true });
+}
+
+// ── Highlights ──
+
+export async function addHighlight(
+    workspaceId: string,
+    fileId: string,
+    highlight: Omit<DBHighlightSchema, "createdAt">,
+) {
+    const highlightsCol = collection(db, "workspaces", workspaceId, "files", fileId, "highlights");
+    const ref = doc(highlightsCol, highlight.id);
+    console.debug("[highlights] addHighlight", {
+        workspaceId,
+        fileId,
+        userId: highlight.userId,
+        highlightId: highlight.id,
+    });
+    await setDoc(ref, {
+        ...highlight,
+        fileId,
+        createdAt: Timestamp.now(),
+    });
+    return ref.id;
+}
+
+export async function deleteHighlight(
+    workspaceId: string,
+    fileId: string,
+    highlightId: string,
+) {
+    const ref = doc(db, "workspaces", workspaceId, "files", fileId, "highlights", highlightId);
+    await deleteDoc(ref);
+}
+
+export function subscribeHighlights(
+    workspaceId: string,
+    fileId: string,
+    userId: string,
+    onHighlights: (highlights: DBHighlightSchema[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const highlightsCol = collection(db, "workspaces", workspaceId, "files", fileId, "highlights");
+    const q = query(highlightsCol, where("userId", "==", userId));
+    console.debug("[highlights] subscribeHighlights:start", { workspaceId, fileId, userId });
+    return onSnapshot(
+        q,
+        (snap) => {
+            const highlights = snap.docs.map((d) => ({
+                ...d.data(),
+                id: d.id,
+            } as DBHighlightSchema));
+            highlights.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis?.() ?? 0;
+                const bTime = b.createdAt?.toMillis?.() ?? 0;
+                return bTime - aTime;
+            });
+            console.debug("[highlights] subscribeHighlights:update", {
+                workspaceId,
+                fileId,
+                userId,
+                count: highlights.length,
+            });
+            onHighlights(highlights);
+        },
+        (err) => {
+            console.error("subscribeHighlights error:", err);
+            onError?.(err);
+        },
+    );
+}
+
+// ── Chats ──
+
 export function subscribeWorkspaceChats(
     workspaceId: string,
     userId: string,
@@ -134,4 +225,43 @@ export function subscribeWorkspaceChats(
             onError?.(err);
         },
     );
+}
+
+export function subscribeChatsByUserId(
+    userId: string,
+    onChats: (chats: DBChatSchema[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const chatsCol = collection(db, "chats");
+    const q = query(chatsCol, where("userId", "==", userId));
+    return onSnapshot(
+        q,
+        (snap) => {
+            const chats = snap.docs.map((d) => ({ ...d.data(), id: d.id } as DBChatSchema));
+            chats.sort((a, b) => {
+                const aTime = (a.createdAt as any)?.toMillis?.() ?? 0;
+                const bTime = (b.createdAt as any)?.toMillis?.() ?? 0;
+                return bTime - aTime;
+            });
+            onChats(chats);
+        },
+        (err) => {
+            console.error("subscribeChatsByUserId error:", err);
+            onError?.(err);
+        },
+    );
+}
+
+// ── Messages ──
+
+const messagesCollection = collection(db, "messages");
+
+export async function getMessagesByChatId(chatId: string) {
+    const q = query(
+        messagesCollection,
+        where("chatId", "==", chatId),
+        orderBy("createdAt", "asc"),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as DBMessageSchema & { id: string }));
 }

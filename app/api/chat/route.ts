@@ -3,8 +3,8 @@ import { object, string, z } from "zod"
 import { messageSchema, userMessageSchema } from "@/lib/firebase/schema";
 import { NextRequest, NextResponse } from "next/server";
 import { serverAuth } from "@/lib/firebase/firebaseServer";
-import { getChatById, getWorkspaceById, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById, updateWorkspaceTitleById } from "@/lib/firebase/server-queries";
-import { aiAgent, generateTitleFromUserMessage } from "@/app/api/chat/ai";
+import { getChatById, getWorkspaceById, getWorkspaceFiles, saveChat, saveMessage, updateChatTimestampById, updateChatTitleById, updateWorkspaceTitleById } from "@/lib/firebase/server-queries";
+import { aiAgent, generateTitleFromUserMessage, setAgentUserId, setAgentWorkspaceId, setAgentFiles, setWebSearchMode, setAgentModel } from "@/app/api/chat/ai";
 import { createVertex } from "@ai-sdk/google-vertex/edge";
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 // Allow streaming responses up to 30 seconds
@@ -23,6 +23,8 @@ export const postRequestBodySchema = z.object({
     message: userMessageSchema.optional(),
     messages: z.array(messageSchema).optional(),
     workspaceId: z.string(),
+    webSearchMode: z.boolean().optional(),
+    model: z.string().optional(),
 });
 
 type PostRequestBody = z.infer<typeof postRequestBodySchema>;
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
         throw new Error("There was an error parsing the post body request")
     }
 
-    const { id, messages, workspaceId } = requestBody
+    const { id, messages, workspaceId, webSearchMode, model } = requestBody
     console.log("Chat request - id:", id, "workspaceId:", workspaceId)
     const uiMessages = messages as UIMessage[]
     const message = uiMessages.at(-1);
@@ -96,6 +98,12 @@ export async function POST(req: Request) {
         const stream = createUIMessageStream({
             execute: async ({ writer }) => {
 
+                setAgentUserId(auth.userId);
+                setAgentWorkspaceId(workspaceId);
+                setWebSearchMode(webSearchMode ?? false);
+                setAgentModel(model);
+                const files = await getWorkspaceFiles({ workspaceId });
+                setAgentFiles(files);
                 const result = await aiAgent.stream({
                     messages: modelMessages,
                 })
@@ -126,9 +134,12 @@ export async function POST(req: Request) {
         return createUIMessageStreamResponse({ stream, })
 
     } catch (err) {
-
+        console.error("Chat route error:", err);
+        return NextResponse.json(
+            { error: err instanceof Error ? err.message : "Internal server error" },
+            { status: 500 },
+        );
     }
-    return;
 
 
 }

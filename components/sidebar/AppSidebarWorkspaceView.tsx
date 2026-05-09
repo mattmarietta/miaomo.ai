@@ -19,13 +19,16 @@ import {
   ArrowLeft,
   Plus,
   Paperclip,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, generateWorkspaceFileId, updateWorkspaceFileStatus } from "@/lib/firebase/client-queries";
 
 export const AppSidebarWorkspaceView = ({
   workspaceId,
@@ -54,7 +57,8 @@ export const AppSidebarWorkspaceView = ({
     if (!file || !user) return;
 
     setUploading(true);
-    const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
+    const fileId = generateWorkspaceFileId(workspaceId);
+    const storagePath = `workspaces/${workspaceId}/files/${fileId}/${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -75,7 +79,90 @@ export const AppSidebarWorkspaceView = ({
             storagePath,
             downloadUrl: url,
             ownerUid: user.uid,
-          });
+          }, fileId);
+
+          const isPdf = file.type.toLowerCase() === "application/pdf";
+          const ocrSupportedTypes = [
+            "image/tiff",
+            "image/tif",
+            "image/gif",
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/bmp",
+            "image/webp",
+          ];
+
+          if (isPdf) {
+            // PDFs: skip OCR, go straight to vectorization
+            try {
+              await updateWorkspaceFileStatus(workspaceId, fileId, "indexing");
+              const token = await user.getIdToken();
+              const ingestRes = await fetch(`/api/documents/${fileId}/ingest`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  url,
+                  workspaceId,
+                  source: file.name,
+                }),
+              });
+              if (ingestRes.ok) {
+                const ingestResult = await ingestRes.json();
+                await updateWorkspaceFileStatus(workspaceId, fileId, "done", {
+                  fullText: ingestResult.fullText,
+                  vectorCount: ingestResult.inserted,
+                });
+              } else {
+                const errorData = await ingestRes.json();
+                console.error("Vectorization failed:", errorData.error);
+                await updateWorkspaceFileStatus(workspaceId, fileId, "indexing_failed", {
+                  errorMessage: errorData.error || "Vectorization failed",
+                });
+              }
+            } catch (ingestError) {
+              console.error("Vectorization error:", ingestError);
+              await updateWorkspaceFileStatus(workspaceId, fileId, "indexing_failed", {
+                errorMessage: ingestError instanceof Error ? ingestError.message : "Unknown error",
+              });
+            }
+          } else if (ocrSupportedTypes.includes(file.type.toLowerCase())) {
+            // Images: OCR first, then vectorize
+            try {
+              await updateWorkspaceFileStatus(workspaceId, fileId, "processing_ocr");
+
+              const ocrResponse = await fetch("/api/ocr/url", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  url,
+                  mimeType: file.type,
+                }),
+              });
+
+              if (ocrResponse.ok) {
+                const ocrResult = await ocrResponse.json();
+                await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_completed", {
+                  fullText: ocrResult.fullText,
+                });
+              } else {
+                const errorData = await ocrResponse.json();
+                await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_failed", {
+                  errorMessage: errorData.error || "OCR processing failed",
+                });
+              }
+            } catch (ocrError) {
+              console.error("OCR processing error:", ocrError);
+              await updateWorkspaceFileStatus(workspaceId, fileId, "ocr_failed", {
+                errorMessage: ocrError instanceof Error ? ocrError.message : "Unknown OCR error",
+              });
+            }
+          }
         } catch (err) {
           console.error(err);
         } finally {
@@ -129,17 +216,38 @@ export const AppSidebarWorkspaceView = ({
               // Build URL with file query param so workspace page can show it
               const href =
                 isPdf && fileUrl
-                  ? `/workspace/${workspaceId}?file=${encodeURIComponent(file.id)}`
+                  ? pathname.includes("/chat/")
+                    ? `${pathname}?file=${encodeURIComponent(file.id)}`
+                    : `/workspace/${workspaceId}?file=${encodeURIComponent(file.id)}`
                   : `/workspace/${workspaceId}`;
+
+              const getStatusIcon = () => {
+                switch (file.status) {
+                  case "processing_ocr":
+                  case "indexing":
+                    return <Loader2 className="size-3.5 shrink-0 text-blue-500 animate-spin ml-2" />;
+                  case "ocr_completed":
+                  case "done":
+                    return <CheckCircle className="size-3.5 shrink-0 text-green-500 ml-2" />;
+                  case "ocr_failed":
+                  case "indexing_failed":
+                    return <XCircle className="size-3.5 shrink-0 text-red-500 ml-2" />;
+                  default:
+                    return null;
+                }
+              };
 
               return (
                 <SidebarMenuItem key={file.id}>
                   <SidebarMenuButton asChild className="gap-2" size="sm">
-                    <Link href={href}>
-                      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate text-sm">
-                        {file.originalName || "Untitled"}
-                      </span>
+                    <Link href={href} className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm">
+                          {file.originalName || "Untitled"}
+                        </span>
+                      </div>
+                      {getStatusIcon()}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -175,7 +283,7 @@ export const AppSidebarWorkspaceView = ({
                 asChild
                 className="gap-2"
                 size="sm"
-                isActive={pathname === `/workspace/${workspaceId}`}
+                isActive={pathname === `/workspace/${workspaceId}` && !pathname.includes('/chat/')}
               >
                 <Link href={`/workspace/${workspaceId}`}>
                   <Plus className="size-3.5 shrink-0 text-muted-foreground" />
