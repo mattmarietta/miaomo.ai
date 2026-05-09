@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import { Flashcard, Card, getDeck, updateDeck, createNewCard } from "@/lib/firebase/flashcardStore";
 import { generateFlashcardsFromText } from "@/lib/aiFlashcardGenerator";
-import { ArrowLeft, Plus, Trash2, Play, X, Upload, Pencil, Sparkles } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Play, X, Upload, Pencil, Sparkles, Brain, ClipboardCheck } from "lucide-react";
 export default function DeckEditorPage() {
   const router = useRouter();
   const params = useParams();
@@ -152,60 +152,109 @@ export default function DeckEditorPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
+      {/* Slim header — just back, title, save indicator */}
       <header className="border-b border-border">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.push("/workspace/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
-              <ArrowLeft size={20} className="text-muted-foreground" />
-            </button>
-            <div>
-              <h1 className="font-semibold">{deck.title}</h1>
-              <p className="text-xs text-muted-foreground">{deck.cards.length} cards</p>
-            </div>
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
+          <button onClick={() => router.push("/workspace/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
+            <ArrowLeft size={20} className="text-muted-foreground" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-semibold truncate">{deck.title}</h1>
+            <p className="text-xs text-muted-foreground">
+              {deck.cards.length} {deck.cards.length === 1 ? "card" : "cards"}
+            </p>
           </div>
-          
-          <div className="flex items-center gap-2">
-            {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
-            {deck.cards.length > 0 && (
-              <button
-                onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}/study`)}
-                className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium"
-              >
-                <Play size={16} />
-                Study
-              </button>
-            )}
-          </div>
+          {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto p-6">
-        {/* Action buttons */}
-        <div className="flex gap-3 mb-6">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted"
-          >
-            <Plus size={16} />
-            Add Card
-          </button>
-          <button
-            onClick={() => setShowAIModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-90"
-          >
-            <Sparkles size={16} />
-            AI Generate
-          </button>
-          {/* File upload - Coming soon */}
-          <button
-            disabled
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm opacity-50 cursor-not-allowed"
-            title="Coming soon - Upload PDF/image to generate cards"
-          >
-            <Upload size={16} />
-            Upload File
-          </button>
+        {/* Study mode tiles — the main thing on this page */}
+        {deck.cards.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+              Study with this deck
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                onClick={() => router.push(`/workspace/quiz-builder/flashcards/${deckId}/study`)}
+                className="group flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-lg bg-foreground/10 flex items-center justify-center flex-shrink-0">
+                  <Play size={18} className="text-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium">Study</p>
+                  <p className="text-xs text-muted-foreground">Flip cards, spaced repetition</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => deck.cards.length >= 2 && router.push(`/workspace/quiz-builder/flashcards/${deckId}/learn`)}
+                disabled={deck.cards.length < 2}
+                className="group flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-card"
+              >
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                  <Brain size={18} className="text-emerald-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium">Learn</p>
+                  <p className="text-xs text-muted-foreground">Multiple choice mastery</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => deck.cards.length >= 2 && router.push(`/workspace/quiz-builder/flashcards/${deckId}/test`)}
+                disabled={deck.cards.length < 2}
+                className="group flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-card"
+              >
+                <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+                  <ClipboardCheck size={18} className="text-indigo-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium">Test</p>
+                  <p className="text-xs text-muted-foreground">Graded mixed quiz</p>
+                </div>
+              </button>
+            </div>
+
+            {deck.cards.length < 2 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Add at least 2 cards to unlock Learn and Test.
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* Manage cards section header + actions */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs uppercase tracking-wider text-muted-foreground">
+            Cards
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAIModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-medium hover:opacity-90"
+            >
+              <Sparkles size={14} />
+              AI Generate
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted"
+            >
+              <Plus size={14} />
+              Add
+            </button>
+            <button
+              disabled
+              title="Coming soon — upload PDF/image to generate cards"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs opacity-40 cursor-not-allowed"
+            >
+              <Upload size={14} />
+              Upload
+            </button>
+          </div>
         </div>
 
         {/* Cards list */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import {
@@ -70,7 +70,7 @@ function WorkspaceCard({
         <div className="rounded-lg bg-primary/10 p-2.5">
           <FolderOpen className="size-5 text-primary" />
         </div>
-        {/* Delete button — asks for confirmation before deleting */}
+        {/* Delete button asks for confirmation before deleting */}
         <button
           onClick={(e) => {
             e.stopPropagation(); // Don't open the workspace
@@ -131,6 +131,13 @@ export default function DashboardPage() {
   const [hasChats, setHasChats] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Reads localStorage at render time. Returns null on the server so it doesn't flash.
+  const onboardingDismissed = useSyncExternalStore<boolean | null>(
+    () => () => {},
+    () => localStorage.getItem("dashboardOnboardingDone") === "true",
+    () => null,
+  );
+
   useEffect(() => {
     if (loading) return;
     if (!user) {
@@ -176,7 +183,7 @@ export default function DashboardPage() {
     };
   }, [user, workspaces]);
 
-  // Auto-check get started steps based on what the user has done
+  // Autocheck get started steps based on what the user has done
   const allCompletedSteps = [...completedSteps];
 
   if (workspaces.length > 0 && !allCompletedSteps.includes("workspace")) {
@@ -194,6 +201,14 @@ export default function DashboardPage() {
   if (hasDecks && !allCompletedSteps.includes("flashcards")) {
     allCompletedSteps.push("flashcards");
   }
+
+  // Once all steps are done, remember it so future refreshes skip the card
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (allCompletedSteps.length >= getStartedItems.length) {
+      localStorage.setItem("dashboardOnboardingDone", "true");
+    }
+  }, [allCompletedSteps.length]);
 
   if (loading) {
     return (
@@ -306,7 +321,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Get Started Checklist */}
+        {/* Get Started Checklist. Hides once every step is done. */}
+        {onboardingDismissed === false && allCompletedSteps.length < getStartedItems.length && (
         <div className="mb-8">
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
             Get started
@@ -340,6 +356,7 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+        )}
 
         {/* Workspaces Grid */}
         <div className="mb-6 flex items-center justify-between">
