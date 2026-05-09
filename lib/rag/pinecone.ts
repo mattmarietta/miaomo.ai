@@ -1,12 +1,16 @@
 import { Pinecone, type RecordMetadata } from "@pinecone-database/pinecone";
+import type { SparseVector } from "./embeddings";
 
 export type ChunkMeta = RecordMetadata & {
-  docId: string;
+  fileId: string;
   chunkIndex: number;
   source: string;
   page?: number;
   chunkText?: string;
 };
+
+// Default hybrid weighting: dense * alpha, sparse * (1 - alpha).
+export const DEFAULT_HYBRID_ALPHA = 0.75;
 
 
 function getPineconeClient(): Pinecone {
@@ -17,69 +21,101 @@ function getPineconeClient(): Pinecone {
     return new Pinecone({ apiKey });
 }
 
-export function getUserIndex(userId : string){
+export function getWorkspaceIndex(workspaceId: string) {
     const indexName = process.env.PINECONE_INDEX_NAME;
     if (!indexName) {
         throw new Error("Missing env var: PINECONE_INDEX_NAME");
     }
 
     const pc = getPineconeClient();
-  // Namespace per user 
-  return pc.index<ChunkMeta>(indexName).namespace(userId);
+    return pc.index<ChunkMeta>(indexName).namespace(workspaceId);
+}
+
+// Client-side hybrid weighting for dotproduct indexes.
+function scaleHybrid(
+  dense: number[],
+  sparse: SparseVector,
+  alpha: number
+): { dense: number[]; sparse: SparseVector } {
+  if (alpha < 0 || alpha > 1) {
+    throw new Error(`alpha must be in [0, 1], got ${alpha}`);
+  }
+  return {
+    dense: dense.map((v) => v * alpha),
+    sparse: {
+      indices: sparse.indices,
+      values: sparse.values.map((v) => v * (1 - alpha)),
+    },
+  };
 }
 
 export async function upsertChunks(params: {
-  userId: string;
+  workspaceId: string;
   docId: string;
   vectors: number[][];
+  sparseVectors: SparseVector[];
   chunks: { chunkText: string; chunkIndex: number; source: string; page?: number }[];
 }) {
-  const { userId, docId, vectors, chunks } = params;
-  const index = getUserIndex(userId);
+  const { workspaceId, docId, vectors, sparseVectors, chunks } = params;
+  const index = getWorkspaceIndex(workspaceId);
 
-  if (vectors.length !== chunks.length) {
-    throw new Error(`Vectors/chunks length mismatch: ${vectors.length} vs ${chunks.length}`);
+  if (sparseVectors.length !== vectors.length) {
+    throw new Error(
+      `sparse/dense length mismatch: ${sparseVectors.length} sparse vs ${vectors.length} dense`
+    );
+  }
+  if (sparseVectors.length !== chunks.length) {
+    throw new Error(
+      `sparse/chunks length mismatch: ${sparseVectors.length} vs ${chunks.length}`
+    );
   }
 
-  const dim = vectors[0]?.length ?? 0;
-  if (dim !== 3072) throw new Error(`Embedding dimension mismatch: expected 3072, got ${dim}`);
-
-  const records = chunks.map((c, i) => {
-    const metadata: ChunkMeta = {
-      docId,
-      chunkIndex: c.chunkIndex,
-      source: c.source,
-      chunkText: c.chunkText,
-      ...(c.page !== undefined ? { page: c.page } : {}),
-    };
-
-    return {
-      id: `${docId}:${c.chunkIndex}`,
-      values: vectors[i],
-      metadata,
-    };
-  });
+  const records = chunks.map((chunk, i) => ({
+    id: `${docId}-chunk-${chunk.chunkIndex}`,
+    values: vectors[i],
+    sparseValues: {
+      indices: sparseVectors[i].indices,
+      values: sparseVectors[i].values,
+    },
+    metadata: {
+      fileId: docId,
+      chunkIndex: chunk.chunkIndex,
+      source: chunk.source,
+      chunkText: chunk.chunkText,
+      ...(chunk.page !== undefined ? { page: chunk.page } : {}),
+    } satisfies ChunkMeta,
+  }));
 
   await index.upsert(records);
-
-  return { inserted: chunks.length, dim };
+  return { inserted: records.length };
 }
 
-
 export async function queryTopK(params: {
-  userId: string;
-  queryVector: number[];
+  workspaceId: string;
+  denseVector: number[];
+  sparseVector: SparseVector;
   topK: number;
-  docId?: string;
+  fileId?: string;
+  alpha?: number;
 }) {
-  const { userId, queryVector, topK, docId } = params;
-  const index = getUserIndex(userId);
+  const {
+    workspaceId,
+    denseVector,
+    sparseVector,
+    topK,
+    fileId,
+    alpha = DEFAULT_HYBRID_ALPHA,
+  } = params;
+  const index = getWorkspaceIndex(workspaceId);
+
+  const scaled = scaleHybrid(denseVector, sparseVector, alpha);
 
   const res = await index.query({
-    vector: queryVector,
+    vector: scaled.dense,
+    sparseVector: scaled.sparse,
     topK,
     includeMetadata: true,
-    ...(docId ? { filter: { docId: { $eq: docId } } } : {}),
+    ...(fileId ? { filter: { fileId: { $eq: fileId } } } : {}),
   });
 
   const matches = (res.matches ?? []).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));

@@ -154,17 +154,29 @@ export default function DeckEditorPage() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Slim header — just back, title, save indicator */}
       <header className="border-b border-border">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <button onClick={() => router.push("/workspace-public/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
-            <ArrowLeft size={20} className="text-muted-foreground" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-semibold truncate">{deck.title}</h1>
-            <p className="text-xs text-muted-foreground">
-              {deck.cards.length} {deck.cards.length === 1 ? "card" : "cards"}
-            </p>
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push("/workspace-public/quiz-builder")} className="p-2 hover:bg-muted rounded-lg">
+              <ArrowLeft size={20} className="text-muted-foreground" />
+            </button>
+            <div>
+              <h1 className="font-semibold">{deck.title}</h1>
+              <p className="text-xs text-muted-foreground">{deck.cards.length} cards</p>
+            </div>
           </div>
-          {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
+
+          <div className="flex items-center gap-2">
+            {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
+            {deck.cards.length > 0 && (
+              <button
+                onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deckId}/study`)}
+                className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium"
+              >
+                <Play size={16} />
+                Study
+              </button>
+            )}
+          </div>
         </div>
       </header>
 

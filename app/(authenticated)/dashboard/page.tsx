@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import {
@@ -9,41 +9,41 @@ import {
   subscribeWorkspaceChats,
   createWorkspace,
   deleteWorkspace,
-  addWorkspaceFile,
+  subscribeQuizzesByUserId,
+  subscribeFlashcardDecksByUserId,
+  type QuizSummary,
+  type FlashcardDeckSummary,
 } from "@/lib/firebase/client-queries";
-import { getUserQuizzes } from "@/lib/firebase/quizStore";
-import { getUserDecks } from "@/lib/firebase/flashcardStore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase/firebase";
 import {
   DBWorkspaceSchema,
   DBWorkspaceFileSchema,
   DBChatSchema,
 } from "@/lib/firebase/schema";
-import {
-  Plus,
-  FolderOpen,
-  Clock,
-  FileText,
-  MessageSquare,
-  Upload,
-  Trash2,
-  CheckCircle2,
-  Circle,
-} from "lucide-react";
+import { Plus, FolderOpen, Clock, FileText, MessageSquare, Sparkles, MoreHorizontal, Trash2, GraduationCap, Layers, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-/* ─── Workspace Card ─── */
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 function WorkspaceCard({
   workspace,
   userId,
   onClick,
+  onDeleteRequest,
 }: {
   workspace: DBWorkspaceSchema;
   userId: string;
   onClick: () => void;
+  onDeleteRequest: () => void;
 }) {
   const [files, setFiles] = useState<DBWorkspaceFileSchema[]>([]);
   const [chats, setChats] = useState<DBChatSchema[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubFiles = subscribeWorkspaceFiles(workspace.id, userId, setFiles, () => setFiles([]));
@@ -54,89 +54,120 @@ function WorkspaceCard({
     };
   }, [workspace.id, userId]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "";
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
+  const recentFileNames = files.slice(0, 3).map((f) => f.originalName);
+
   return (
     <div
       onClick={onClick}
-      className="group flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-5 hover:bg-accent/50 transition-colors cursor-pointer text-left min-h-[160px]"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      className="group relative flex flex-col items-start gap-3 rounded-xl border border-border bg-card overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="flex items-start justify-between w-full">
-        <div className="rounded-lg bg-primary/10 p-2.5">
-          <FolderOpen className="size-5 text-primary" />
-        </div>
-        {/* Delete button asks for confirmation before deleting */}
+      <div className="h-1 w-full bg-primary" />
+
+      {/* Kebab menu — only visible on card hover */}
+      <div
+        ref={menuRef}
+        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
-          onClick={(e) => {
-            e.stopPropagation(); // Don't open the workspace
-            if (confirm("Delete this workspace? This cannot be undone.")) {
-              deleteWorkspace(workspace.id, userId);
-            }
-          }}
-          className="p-1.5 rounded-lg text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 transition-all"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+          className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Workspace options"
         >
-          <Trash2 className="size-4" />
+          <MoreHorizontal className="size-4" />
         </button>
-      </div>
-      <div className="flex-1 min-w-0 w-full">
-        <h3 className="font-medium text-foreground truncate">
-          {workspace.title || "Untitled Workspace"}
-        </h3>
+
+        {menuOpen && (
+          <div className="absolute right-0 top-8 w-44 rounded-lg border border-border bg-card shadow-md py-1 z-20">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onDeleteRequest();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            >
+              <Trash2 className="size-3.5" />
+              Delete workspace
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <FileText className="size-3" />
-          <span>
-            {files.length} {files.length === 1 ? "file" : "files"}
-          </span>
+      <div className="flex flex-col gap-3 px-5 pb-5 pt-3 w-full">
+        <div className="rounded-lg bg-primary/10 p-2.5 w-fit">
+          <FolderOpen className="size-5 text-primary" />
         </div>
-        <div className="flex items-center gap-1">
-          <MessageSquare className="size-3" />
-          <span>
-            {chats.length} {chats.length === 1 ? "chat" : "chats"}
-          </span>
+        <div className="flex-1 min-w-0 w-full">
+          <h3 className="font-medium text-foreground truncate pr-6">
+            {workspace.title || "Untitled Workspace"}
+          </h3>
+          {recentFileNames.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {recentFileNames.map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  <FileText className="size-2.5" />
+                  <span className="truncate max-w-[100px]">{name}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-1 ml-auto">
-          <Clock className="size-3" />
-          <span>{formatDate(workspace.updatedAt)}</span>
+
+        <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t border-border/50">
+          <div className="flex items-center gap-1">
+            <FileText className="size-3" />
+            <span>
+              {files.length} {files.length === 1 ? "file" : "files"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <MessageSquare className="size-3" />
+            <span>
+              {chats.length} {chats.length === 1 ? "chat" : "chats"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 ml-auto">
+            <Clock className="size-3" />
+            <span>{formatDate(workspace.updatedAt)}</span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// Checklist items 
-const getStartedItems = [
-  { id: "workspace", label: "Create a new workspace" },
-  { id: "upload", label: "Upload a file to a workspace" },
-  { id: "chat", label: "Chat with your files" },
-  { id: "quiz", label: "Create a quiz from your notes" },
-  { id: "flashcards", label: "Build a flashcard deck" },
-];
-
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [workspaces, setWorkspaces] = useState<DBWorkspaceSchema[]>([]);
-  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
-  const [hasQuizzes, setHasQuizzes] = useState(false);
-  const [hasDecks, setHasDecks] = useState(false);
-  const [hasUploads, setHasUploads] = useState(false);
-  const [hasChats, setHasChats] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Reads localStorage at render time. Returns null on the server so it doesn't flash.
-  const onboardingDismissed = useSyncExternalStore<boolean | null>(
-    () => () => {},
-    () => localStorage.getItem("dashboardOnboardingDone") === "true",
-    () => null,
-  );
+  const [quizzes, setQuizzes] = useState<QuizSummary[]>([]);
+  const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeckSummary[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<DBWorkspaceSchema | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -144,71 +175,15 @@ export default function DashboardPage() {
       router.replace("/login");
       return;
     }
-    const unsub = subscribeWorkspacesByUserId(user.uid, setWorkspaces);
-
-    // Check if user has quizzes and flashcard decks
-    getUserQuizzes(user.uid).then((q) => setHasQuizzes(q.length > 0));
-    getUserDecks(user.uid).then((d) => setHasDecks(d.length > 0));
-
-    return () => unsub();
-  }, [loading, user, router]);
-
-  // Check if any workspace has files or chats
-  useEffect(() => {
-    if (!user || workspaces.length === 0) return;
-
-    const cleanupFunctions: (() => void)[] = [];
-
-    for (let i = 0; i < workspaces.length; i++) {
-      const ws = workspaces[i];
-
-      // Subscribe to files for this workspace
-      const unsubFiles = subscribeWorkspaceFiles(ws.id, user.uid, function (files) {
-        if (files.length > 0) setHasUploads(true);
-      }, function () {});
-
-      // Subscribe to chats for this workspace
-      const unsubChats = subscribeWorkspaceChats(ws.id, user.uid, function (chats) {
-        if (chats.length > 0) setHasChats(true);
-      }, function () {});
-
-      cleanupFunctions.push(unsubFiles);
-      cleanupFunctions.push(unsubChats);
-    }
-
-    return function cleanup() {
-      for (let i = 0; i < cleanupFunctions.length; i++) {
-        cleanupFunctions[i]();
-      }
+    const unsubWorkspaces = subscribeWorkspacesByUserId(user.uid, setWorkspaces);
+    const unsubQuizzes = subscribeQuizzesByUserId(user.uid, setQuizzes);
+    const unsubDecks = subscribeFlashcardDecksByUserId(user.uid, setFlashcardDecks);
+    return () => {
+      unsubWorkspaces();
+      unsubQuizzes();
+      unsubDecks();
     };
-  }, [user, workspaces]);
-
-  // Autocheck get started steps based on what the user has done
-  const allCompletedSteps = [...completedSteps];
-
-  if (workspaces.length > 0 && !allCompletedSteps.includes("workspace")) {
-    allCompletedSteps.push("workspace");
-  }
-  if (hasUploads && !allCompletedSteps.includes("upload")) {
-    allCompletedSteps.push("upload");
-  }
-  if (hasChats && !allCompletedSteps.includes("chat")) {
-    allCompletedSteps.push("chat");
-  }
-  if (hasQuizzes && !allCompletedSteps.includes("quiz")) {
-    allCompletedSteps.push("quiz");
-  }
-  if (hasDecks && !allCompletedSteps.includes("flashcards")) {
-    allCompletedSteps.push("flashcards");
-  }
-
-  // Once all steps are done, remember it so future refreshes skip the card
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (allCompletedSteps.length >= getStartedItems.length) {
-      localStorage.setItem("dashboardOnboardingDone", "true");
-    }
-  }, [allCompletedSteps.length]);
+  }, [loading, user, router]);
 
   if (loading) {
     return (
@@ -231,135 +206,40 @@ export default function DashboardPage() {
     router.push(`/workspace/${id}`);
   };
 
-  // When a file is picked, you create a workspace, upload the file, then redirect
-  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      // Create a new workspace named after the file
-      const workspaceId = await createWorkspace(user.uid, file.name);
-
-      // Upload the file to Firebase 
-      const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
-      const fileRef = ref(storage, storagePath);
-      const uploadTask = uploadBytesResumable(fileRef, file);
-
-      // Wait for upload to finish, then save file info to Firestore
-      uploadTask.on("state_changed",
-        null,
-        (err) => console.error("Upload failed:", err),
-        async () => {
-          // Get download URL after upload is done
-          const url = await getDownloadURL(uploadTask.snapshot.ref);
-
-          // Save the file metadata to the workspace
-          await addWorkspaceFile(workspaceId, {
-            originalName: file.name,
-            mimeType: file.type || "application/octet-stream",
-            size: file.size,
-            storagePath: storagePath,
-            downloadUrl: url,
-            ownerUid: user.uid,
-          });
-
-          // Go to the new workspace
-          router.push(`/workspace/${workspaceId}`);
-        }
-      );
+      await deleteWorkspace(deleteTarget.id, user.uid);
     } catch (err) {
-      console.error("Error uploading file:", err);
+      console.error("Failed to delete workspace:", err);
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
-
-    // Reset file input so the same file can be picked again
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  // Toggle a checklist item
-  const toggleStep = (id: string) => {
-    setCompletedSteps(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
   };
 
   return (
     <main className="flex-1 overflow-y-auto bg-background">
-      {/* Hidden file input for the Upload button */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleUploadFile}
-        accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-        className="hidden"
-      />
-
-      <div className="max-w-3xl mx-auto px-6 py-8">
-
+      <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Welcome back
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{user.email}</p>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            Quick actions
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 hover:bg-accent/50 transition-colors cursor-pointer"
-            >
-              <Upload className="size-5 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">
-                Upload
-              </span>
-            </button>
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {getGreeting()}, {user.displayName || user.email || "there"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Here&apos;s an overview of your workspaces
+            </p>
           </div>
+          <Button onClick={handleCreateWorkspace} className="gap-2">
+            <Plus className="size-4" />
+            New Workspace
+          </Button>
         </div>
-
-        {/* Get Started Checklist. Hides once every step is done. */}
-        {onboardingDismissed === false && allCompletedSteps.length < getStartedItems.length && (
-        <div className="mb-8">
-          <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            Get started
-          </h2>
-          <div className="rounded-xl border border-border bg-card p-2">
-            {getStartedItems.map((item) => {
-              const done = allCompletedSteps.includes(item.id);
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => toggleStep(item.id)}
-                  className="flex items-center gap-3 w-full rounded-lg px-3 py-3 hover:bg-accent/50 transition-colors text-left"
-                >
-                  {done ? (
-                    <CheckCircle2 className="size-5 text-primary flex-shrink-0 transition-colors duration-300" />
-                  ) : (
-                    <Circle className="size-5 text-muted-foreground flex-shrink-0 transition-colors duration-300" />
-                  )}
-                  <span className="relative text-sm font-medium transition-colors duration-300">
-                    <span className={done ? "text-muted-foreground" : "text-foreground"}>
-                      {item.label}
-                    </span>
-                    <span
-                      className={`absolute left-0 top-1/2 h-[1.5px] bg-muted-foreground transition-all duration-500 ease-in-out ${
-                        done ? "w-full" : "w-0"
-                      }`}
-                    />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        )}
 
         {/* Workspaces Grid */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4">
           <h2 className="text-lg font-medium text-foreground">
             Your Workspaces
           </h2>
@@ -369,13 +249,16 @@ export default function DashboardPage() {
           {/* Create New */}
           <button
             onClick={handleCreateWorkspace}
-            className="group flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-8 hover:border-primary/50 hover:bg-muted/50 transition-all cursor-pointer min-h-[160px]"
+            className="group flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-8 hover:border-primary/50 hover:bg-muted/50 transition-all cursor-pointer min-h-[200px]"
           >
             <div className="rounded-full bg-muted p-3 group-hover:bg-primary/10 transition-colors">
               <Plus className="size-6 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
               New Workspace
+            </span>
+            <span className="text-[12px] text-muted-foreground/60 text-center leading-tight">
+              Upload files, chat with AI, build quizzes
             </span>
           </button>
 
@@ -386,19 +269,116 @@ export default function DashboardPage() {
               workspace={ws}
               userId={user.uid}
               onClick={() => router.push(`/workspace/${ws.id}`)}
+              onDeleteRequest={() => setDeleteTarget(ws)}
             />
           ))}
         </div>
 
         {workspaces.length === 0 && (
-          <div className="text-center py-12">
-            <FolderOpen className="size-12 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground">
-              No workspaces yet. Create one to get started.
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="rounded-full bg-primary/10 p-6 mb-6">
+              <Sparkles className="size-10 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">
+              Create your first workspace
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-md">
+              Workspaces help you organize your documents and conversations.
+              Upload files, chat with AI, and generate study materials.
             </p>
+            <Button onClick={handleCreateWorkspace} size="lg" className="gap-2">
+              <Plus className="size-4" />
+              Create Workspace
+            </Button>
+          </div>
+        )}
+
+        {/* Study Tools Section */}
+        {(quizzes.length > 0 || flashcardDecks.length > 0) && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-foreground">Study Tools</h2>
+              <button
+                onClick={() => router.push("/workspace-public/quiz-builder")}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                View all
+                <ArrowRight className="size-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {quizzes.slice(0, 4).map((quiz) => (
+                <button
+                  key={quiz.id}
+                  onClick={() => router.push(`/workspace-public/quiz-builder/${quiz.id}`)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:shadow-sm hover:-translate-y-0.5 transition-all text-left"
+                >
+                  <div className="rounded-lg bg-primary/10 p-2 shrink-0">
+                    <GraduationCap className="size-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{quiz.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {quiz.questionCount} {quiz.questionCount === 1 ? "question" : "questions"}
+                    </p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+
+              {flashcardDecks.slice(0, 4).map((deck) => (
+                <button
+                  key={deck.id}
+                  onClick={() => router.push(`/workspace-public/quiz-builder/flashcards/${deck.id}`)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:shadow-sm hover:-translate-y-0.5 transition-all text-left"
+                >
+                  <div className="rounded-lg bg-amber-500/10 p-2 shrink-0">
+                    <Layers className="size-4 text-amber-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{deck.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {deck.cardCount} {deck.cardCount === 1 ? "card" : "cards"}
+                    </p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Delete workspace confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-base font-semibold text-foreground mb-2">
+              Delete this workspace?
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              This cannot be undone. All files and chats in &ldquo;{deleteTarget.title || "Untitled Workspace"}&rdquo; will be permanently deleted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteLoading}
+                className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deleteLoading ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

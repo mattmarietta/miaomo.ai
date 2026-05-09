@@ -1,0 +1,8 @@
+[
+    {
+        "origin": ["http://localhost:3000", "https://miaomo-ai.vercel.app"],
+        "method": ["GET", "HEAD", "OPTIONS"],
+        "responseHeader": ["Content-Type"],
+        "maxAgeSeconds": 3600
+    }
+]

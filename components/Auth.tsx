@@ -3,12 +3,15 @@
 import { auth } from "@/lib/firebase/firebase";
 import {
   onAuthStateChanged,
+  linkWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  GithubAuthProvider,
   signInWithPopup,
   signOut,
   type User,
+  type AuthProvider as FirebaseAuthProvider
 } from "firebase/auth";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
@@ -18,6 +21,8 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  loginWithGithub: () => Promise<void>;
+  linkAccount: (provider: FirebaseAuthProvider) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -48,12 +53,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithPopup(auth, provider);
   };
 
+  const loginWithGithub = async () => {
+    const provider = new GithubAuthProvider();
+    await signInWithPopup(auth, provider);
+  }
+
+  const linkAccount = async (provider: FirebaseAuthProvider) => {
+    if (!auth.currentUser) throw new Error("No user to link account to.");
+
+    try {
+      await linkWithPopup(auth.currentUser, provider);
+    } catch (error: any) {
+      if (error.code === "auth/credential-already-in-use") {
+        alert("This account is already linked with another user.");
+      } else {
+        console.error("Error linking accounts: ", error);
+        throw error;
+      }
+    }
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      signup, 
+      loginWithGoogle, 
+      loginWithGithub, 
+      linkAccount,
+      logout  
+    }}>
       {children}
     </AuthContext.Provider>
   );

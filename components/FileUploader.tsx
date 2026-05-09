@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/firebase";
-import { addWorkspaceFile } from "@/lib/firebase/client-queries";
+import { addWorkspaceFile, generateWorkspaceFileId } from "@/lib/firebase/client-queries";
 import { Button } from "@/components/ui/button";
 import { CirclePlus, Loader2, FileText, X } from "lucide-react";
 
@@ -22,6 +22,10 @@ export default function FileUploader({ workspaceId, onUploadComplete }: FileUplo
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+
+        //allow re-uploading same file later
+        e.currentTarget.value = "";
+
         if (!file) return;
 
         setUploading(true);
@@ -35,7 +39,10 @@ export default function FileUploader({ workspaceId, onUploadComplete }: FileUplo
             return;
         }
 
-        const storagePath = `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
+        const fileId = workspaceId ? generateWorkspaceFileId(workspaceId) : undefined;
+        const storagePath = workspaceId && fileId
+            ? `workspaces/${workspaceId}/files/${fileId}/${file.name}`
+            : `users/${user.uid}/uploads/${Date.now()}-${file.name}`;
         const storageRef = ref(storage, storagePath);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -62,7 +69,7 @@ export default function FileUploader({ workspaceId, onUploadComplete }: FileUplo
                             storagePath,
                             downloadUrl: url,
                             ownerUid: user.uid,
-                        });
+                        }, fileId);
                     }
 
                     onUploadComplete?.(url, file.name);

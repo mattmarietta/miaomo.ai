@@ -11,7 +11,6 @@ import {
   updateQuiz,
   generateId,
 } from "@/lib/firebase/quizStore";
-import { generateQuestionsFromText } from "@/lib/aiQuizGenerator";
 import { ArrowLeft, Play, Sparkles, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 
 type PageProps = {
@@ -163,7 +162,14 @@ export default function QuizEditorPage({ params }: PageProps) {
     
     setGenerating(true);
     try {
-      const newQs = await generateQuestionsFromText(aiText, aiCount, types);
+      const token = await user!.getIdToken();
+      const res = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: aiText, count: aiCount, types }),
+      });
+      if (!res.ok) throw new Error("Generation failed");
+      const { questions: newQs } = await res.json();
       const updated = { ...quiz, questions: [...quiz.questions, ...newQs] };
       setQuiz(updated);
       await save(updated);
@@ -409,7 +415,6 @@ export default function QuizEditorPage({ params }: PageProps) {
                 {/* Explanation */}
                 {q.explanation && (
                   <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
-                    <span className="text-muted-foreground font-medium">Explanation: </span>
                     {q.explanation}
                   </div>
                 )}
