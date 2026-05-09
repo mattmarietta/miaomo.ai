@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import {
@@ -19,7 +19,7 @@ import {
   DBWorkspaceFileSchema,
   DBChatSchema,
 } from "@/lib/firebase/schema";
-import { Plus, FolderOpen, Clock, FileText, MessageSquare, Sparkles, MoreHorizontal, Trash2, GraduationCap, Layers, ArrowRight } from "lucide-react";
+import { Plus, FolderOpen, Clock, FileText, MessageSquare, Sparkles, MoreHorizontal, Trash2, GraduationCap, Layers, ArrowRight, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function getGreeting(): string {
@@ -160,6 +160,14 @@ function WorkspaceCard({
   );
 }
 
+const getStartedItems = [
+  { id: "workspace", label: "Create a new workspace" },
+  { id: "upload", label: "Upload a file to a workspace" },
+  { id: "chat", label: "Chat with your files" },
+  { id: "quiz", label: "Create a quiz from your notes" },
+  { id: "flashcards", label: "Build a flashcard deck" },
+];
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -168,6 +176,16 @@ export default function DashboardPage() {
   const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeckSummary[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<DBWorkspaceSchema | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [hasUploads, setHasUploads] = useState(false);
+  const [hasChats, setHasChats] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+
+  // Reads localStorage at render time. Returns null on the server so it doesn't flash.
+  const onboardingDismissed = useSyncExternalStore<boolean | null>(
+    () => () => {},
+    () => localStorage.getItem("dashboardOnboardingDone") === "true",
+    () => null,
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -184,6 +202,45 @@ export default function DashboardPage() {
       unsubDecks();
     };
   }, [loading, user, router]);
+
+  // Watch all workspaces for files/chats so we can auto-check Get started steps
+  useEffect(() => {
+    if (!user || workspaces.length === 0) return;
+    const cleanups: (() => void)[] = [];
+    for (const ws of workspaces) {
+      cleanups.push(
+        subscribeWorkspaceFiles(ws.id, user.uid, (files) => {
+          if (files.length > 0) setHasUploads(true);
+        }, () => {})
+      );
+      cleanups.push(
+        subscribeWorkspaceChats(ws.id, user.uid, (chats) => {
+          if (chats.length > 0) setHasChats(true);
+        }, () => {})
+      );
+    }
+    return () => cleanups.forEach((fn) => fn());
+  }, [user, workspaces]);
+
+  // Auto-derived checklist progress
+  const allCompletedSteps = [...completedSteps];
+  if (workspaces.length > 0 && !allCompletedSteps.includes("workspace")) allCompletedSteps.push("workspace");
+  if (hasUploads && !allCompletedSteps.includes("upload")) allCompletedSteps.push("upload");
+  if (hasChats && !allCompletedSteps.includes("chat")) allCompletedSteps.push("chat");
+  if (quizzes.length > 0 && !allCompletedSteps.includes("quiz")) allCompletedSteps.push("quiz");
+  if (flashcardDecks.length > 0 && !allCompletedSteps.includes("flashcards")) allCompletedSteps.push("flashcards");
+
+  // Once all steps done, remember it so future refreshes skip the card
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (allCompletedSteps.length >= getStartedItems.length) {
+      localStorage.setItem("dashboardOnboardingDone", "true");
+    }
+  }, [allCompletedSteps.length]);
+
+  const toggleStep = (id: string) => {
+    setCompletedSteps((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
+  };
 
   if (loading) {
     return (
@@ -237,6 +294,43 @@ export default function DashboardPage() {
             New Workspace
           </Button>
         </div>
+
+        {/* Get Started checklist. Hides once every step is done. */}
+        {onboardingDismissed === false && allCompletedSteps.length < getStartedItems.length && (
+          <div className="mb-8">
+            <h2 className="text-sm font-medium text-muted-foreground mb-3">
+              Get started
+            </h2>
+            <div className="rounded-xl border border-border bg-card p-2">
+              {getStartedItems.map((item) => {
+                const done = allCompletedSteps.includes(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => toggleStep(item.id)}
+                    className="flex items-center gap-3 w-full rounded-lg px-3 py-3 hover:bg-accent/50 transition-colors text-left"
+                  >
+                    {done ? (
+                      <CheckCircle2 className="size-5 text-primary flex-shrink-0 transition-colors duration-300" />
+                    ) : (
+                      <Circle className="size-5 text-muted-foreground flex-shrink-0 transition-colors duration-300" />
+                    )}
+                    <span className="relative text-sm font-medium transition-colors duration-300">
+                      <span className={done ? "text-muted-foreground" : "text-foreground"}>
+                        {item.label}
+                      </span>
+                      <span
+                        className={`absolute left-0 top-1/2 h-[1.5px] bg-muted-foreground transition-all duration-500 ease-in-out ${
+                          done ? "w-full" : "w-0"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Workspaces Grid */}
         <div className="mb-4">

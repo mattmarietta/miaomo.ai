@@ -415,6 +415,7 @@ export default function QuizEditorPage({ params }: PageProps) {
                 {/* Explanation */}
                 {q.explanation && (
                   <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
+                    <span className="text-muted-foreground font-medium">Explanation: </span>
                     {q.explanation}
                   </div>
                 )}

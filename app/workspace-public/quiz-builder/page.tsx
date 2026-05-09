@@ -10,7 +10,7 @@ import { DBWorkspaceSchema, DBWorkspaceFileSchema } from "@/lib/firebase/schema"
 import { ArrowLeft, Plus, FileText, Trash2, Play, Sparkles, Layers, Upload, ClipboardPaste, X, FolderOpen, Search, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 type Tab = "quizzes" | "flashcards";
-type QuizCreateMode = "select" | "paste" | "empty" | "workspace";
+type QuizCreateMode = "select" | "paste" | "upload" | "empty" | "workspace";
 
 const MIN_CHARS = 300;
 const MAX_CHARS = 100000;
@@ -57,6 +57,12 @@ export default function StudyToolsPage() {
   const [ragRetrieving, setRagRetrieving] = useState(false);
   const [ragChunks, setRagChunks] = useState<{ text: string; source: string; fileId: string }[]>([]);
   const [ragError, setRagError] = useState("");
+
+  // File upload state for the quiz upload mode
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractMethod, setExtractMethod] = useState<string | null>(null);
 
   // Flashcard create modal
   const [showDeckModal, setShowDeckModal] = useState(false);
@@ -309,6 +315,40 @@ export default function StudyToolsPage() {
     }
   }
 
+  function resetUploadState() {
+    setUploadedFileName(null);
+    setExtracting(false);
+    setExtractError(null);
+    setExtractMethod(null);
+  }
+
+  // Send file to extraction endpoint, then drop the text into pasteText so the
+  // existing handleGenerateQuiz flow picks it up.
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtracting(true);
+    setExtractError(null);
+    setUploadedFileName(file.name);
+    setExtractMethod(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/extract/text", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Extraction failed");
+      setPasteText(data.text);
+      setExtractMethod(data.method);
+    } catch (err) {
+      console.error(err);
+      setExtractError(err instanceof Error ? err.message : "Failed to read file");
+      setUploadedFileName(null);
+    } finally {
+      setExtracting(false);
+      e.target.value = "";
+    }
+  }
+
   function openQuizModal() {
     setQuizCreateMode("select");
     setNewTitle("");
@@ -319,6 +359,7 @@ export default function StudyToolsPage() {
     setRagQuery("");
     setRagChunks([]);
     setRagError("");
+    resetUploadState();
     setShowQuizModal(true);
   }
 
@@ -333,6 +374,7 @@ export default function StudyToolsPage() {
     setRagQuery("");
     setRagChunks([]);
     setRagError("");
+    resetUploadState();
   }
 
   if (authLoading || isLoading) {
@@ -516,6 +558,7 @@ export default function StudyToolsPage() {
               <h2 className="text-lg font-semibold">
                 {quizCreateMode === "select" && "Create Quiz"}
                 {quizCreateMode === "paste" && "Paste Text"}
+                {quizCreateMode === "upload" && "Upload File"}
                 {quizCreateMode === "empty" && "New Quiz"}
                 {quizCreateMode === "workspace" && "From Workspace Files"}
               </h2>
@@ -550,6 +593,19 @@ export default function StudyToolsPage() {
                   <div>
                     <p className="font-medium">From Workspace Files</p>
                     <p className="text-sm text-muted-foreground">Generate from your indexed documents</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setQuizCreateMode("upload")}
+                  className="w-full flex items-center gap-4 p-4 border border-border rounded-xl hover:bg-muted text-left"
+                >
+                  <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                    <Upload size={20} className="text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Upload File</p>
+                    <p className="text-sm text-muted-foreground">PDF or image, extracted via OCR</p>
                   </div>
                 </button>
 
@@ -639,6 +695,121 @@ export default function StudyToolsPage() {
                   <button
                     onClick={handleGenerateQuiz}
                     disabled={!isValidLength}
+                    className="flex-1 px-4 py-2.5 bg-foreground text-background rounded-lg text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Sparkles size={16} />
+                    Generate
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Upload File Mode. PDF/image to OCR, then reuses the same generate flow as Paste. */}
+            {quizCreateMode === "upload" && (
+              <div>
+                <button
+                  onClick={() => { setQuizCreateMode("select"); setPasteText(""); resetUploadState(); }}
+                  className="text-sm text-muted-foreground hover:text-foreground mb-4"
+                >
+                  ← Back
+                </button>
+
+                {!uploadedFileName && !extracting && (
+                  <label className="block w-full border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:bg-muted/30">
+                    <Upload size={28} className="mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm font-medium mb-1">Click to upload</p>
+                    <p className="text-xs text-muted-foreground">PDF, PNG, or JPG (max 20MB)</p>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+
+                {extracting && (
+                  <div className="p-6 text-center border border-border rounded-xl">
+                    <p className="text-sm font-medium mb-1">Reading your file...</p>
+                    <p className="text-xs text-muted-foreground">Scanned PDFs take a bit longer (OCR).</p>
+                  </div>
+                )}
+
+                {extractError && (
+                  <div className="p-4 border border-red-500/30 bg-red-500/10 rounded-xl mb-4">
+                    <p className="text-sm text-red-500">{extractError}</p>
+                  </div>
+                )}
+
+                {uploadedFileName && !extracting && (
+                  <>
+                    <div className="p-4 border border-border rounded-xl mb-4 flex items-start gap-3">
+                      <FileText size={20} className="text-muted-foreground mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{uploadedFileName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {charCount.toLocaleString()} characters
+                          {extractMethod === "pdf-ocr" && " (OCR)"}
+                          {extractMethod === "image-ocr" && " (OCR)"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {charCount > 0 && !isValidLength && (
+                      <p className="text-xs text-red-500 mb-3">
+                        Need between {MIN_CHARS} and {MAX_CHARS.toLocaleString()} characters; got {charCount.toLocaleString()}.
+                      </p>
+                    )}
+
+                    {isValidLength && (
+                      <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+                        <p className="text-sm font-medium mb-3">Question Types</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={includeMultipleChoice} onChange={(e) => setIncludeMultipleChoice(e.target.checked)} />
+                            Multiple Choice
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={includeTrueFalse} onChange={(e) => setIncludeTrueFalse(e.target.checked)} />
+                            True / False
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={includeWritten} onChange={(e) => setIncludeWritten(e.target.checked)} />
+                            Written
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={includeMatching} onChange={(e) => setIncludeMatching(e.target.checked)} />
+                            Matching
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-3 mt-3">
+                          <span className="text-sm">Questions:</span>
+                          <select
+                            value={questionCount}
+                            onChange={(e) => setQuestionCount(Number(e.target.value))}
+                            className="bg-background border border-border rounded px-2 py-1 text-sm"
+                          >
+                            <option value={5}>5</option>
+                            <option value={10}>10</option>
+                            <option value={15}>15</option>
+                            <option value={20}>20</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={closeQuizModal}
+                    className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleGenerateQuiz}
+                    disabled={!isValidLength || extracting}
                     className="flex-1 px-4 py-2.5 bg-foreground text-background rounded-lg text-sm disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <Sparkles size={16} />
