@@ -83,10 +83,12 @@ export default function StudyToolsPage() {
     async function load() {
       if (!user) return;
       try {
-        const quizData = await getUserQuizzes(user.uid);
+        // Run both queries in parallel so the page loads faster.
+        const [quizData, deckData] = await Promise.all([
+          getUserQuizzes(user.uid),
+          getUserDecks(user.uid),
+        ]);
         setQuizzes(quizData);
-        
-        const deckData = await getUserDecks(user.uid);
         setDecks(deckData);
       } catch (err) {
         console.error(err);
