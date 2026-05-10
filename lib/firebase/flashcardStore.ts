@@ -34,6 +34,9 @@ export type Flashcard = {
   cards: Card[];
   createdAt: Date;
   updatedAt: Date;
+  // Source workspace/files when generated from RAG, used by stats page.
+  sourceWorkspaceId?: string | null;
+  sourceFileIds?: string[];
 };
 
 // Generate random ID
@@ -75,18 +78,27 @@ export function practiceCard(card: Card, grade: SuperMemoGrade): Card {
 
 const decksCollection = collection(db, "flashcardDecks");
 
-// Create new deck
-export async function createDeck(userId: string, title: string, description: string): Promise<Flashcard> {
+// Create new deck. Pass source when generating from workspace files.
+export async function createDeck(
+  userId: string,
+  title: string,
+  description: string,
+  source?: { workspaceId?: string; fileIds?: string[] }
+): Promise<Flashcard> {
   const now = Timestamp.now();
 
-  const docRef = await addDoc(decksCollection, {
+  const data: Record<string, unknown> = {
     userId,
     title,
     description,
     cards: [],
     createdAt: now,
     updatedAt: now,
-  });
+  };
+  if (source?.workspaceId) data.sourceWorkspaceId = source.workspaceId;
+  if (source?.fileIds && source.fileIds.length > 0) data.sourceFileIds = source.fileIds;
+
+  const docRef = await addDoc(decksCollection, data);
 
   return {
     id: docRef.id,
@@ -96,6 +108,8 @@ export async function createDeck(userId: string, title: string, description: str
     cards: [],
     createdAt: now.toDate(),
     updatedAt: now.toDate(),
+    sourceWorkspaceId: source?.workspaceId ?? null,
+    sourceFileIds: source?.fileIds ?? [],
   };
 }
 
@@ -115,6 +129,8 @@ export async function getDeck(deckId: string): Promise<Flashcard | null> {
     cards: data.cards || [],
     createdAt: data.createdAt?.toDate() ?? new Date(),
     updatedAt: data.updatedAt?.toDate() ?? new Date(),
+    sourceWorkspaceId: data.sourceWorkspaceId ?? null,
+    sourceFileIds: data.sourceFileIds ?? [],
   };
 }
 
@@ -137,6 +153,8 @@ export async function getUserDecks(userId: string): Promise<Flashcard[]> {
       cards: data.cards || [],
       createdAt: data.createdAt?.toDate() ?? new Date(),
       updatedAt: data.updatedAt?.toDate() ?? new Date(),
+      sourceWorkspaceId: data.sourceWorkspaceId ?? null,
+      sourceFileIds: data.sourceFileIds ?? [],
     };
   });
 }

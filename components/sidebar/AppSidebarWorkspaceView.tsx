@@ -23,6 +23,7 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
+  BarChart3,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -327,6 +328,25 @@ export const AppSidebarWorkspaceView = ({
           </div>
         </div>
       )}
+
+      {/* Statistics link */}
+      <SidebarGroup>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              className="gap-2"
+              size="sm"
+              isActive={pathname === `/workspace/${workspaceId}/stats`}
+            >
+              <Link href={`/workspace/${workspaceId}/stats`}>
+                <BarChart3 className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm font-medium">Statistics</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroup>
 
       {/* Chats */}
       <SidebarGroup>

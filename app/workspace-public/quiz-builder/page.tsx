@@ -194,7 +194,13 @@ export default function StudyToolsPage() {
       const combinedText = ragChunks.map((c) => c.text).join("\n\n");
       const title = ragQuery.substring(0, 50).trim() + (ragQuery.length > 50 ? "..." : "");
 
-      const quiz = await createQuiz(user.uid, title, `Generated from workspace files: ${ragQuery}`);
+      // Tag the quiz with workspace/file IDs for stats tracking.
+      const quiz = await createQuiz(
+        user.uid,
+        title,
+        `Generated from workspace files: ${ragQuery}`,
+        { workspaceId: selectedWorkspaceId ?? undefined, fileIds: Array.from(selectedFileIds) }
+      );
 
       setGeneratingStatus("Generating questions...");
       const token = await user.getIdToken();

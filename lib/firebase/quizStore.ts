@@ -52,6 +52,9 @@ export type Quiz = {
   questions: Question[];
   createdAt: Date;
   updatedAt: Date;
+  // Source workspace/files when generated from RAG, used by stats page.
+  sourceWorkspaceId?: string | null;
+  sourceFileIds?: string[];
 };
 
 // Record of a user's quiz attempt
@@ -75,22 +78,27 @@ export function generateId(): string {
 const quizzesCollection = collection(db, "quizzes");
 const attemptsCollection = collection(db, "quizAttempts");
 
-// Create a new quiz
+// Create a new quiz. Pass source when generating from workspace files.
 export async function createQuiz(
   userId: string,
   title: string,
-  description: string
+  description: string,
+  source?: { workspaceId?: string; fileIds?: string[] }
 ): Promise<Quiz> {
   const now = Timestamp.now();
 
-  const docRef = await addDoc(quizzesCollection, {
+  const data: Record<string, unknown> = {
     userId,
     title,
     description,
     questions: [],
     createdAt: now,
     updatedAt: now,
-  });
+  };
+  if (source?.workspaceId) data.sourceWorkspaceId = source.workspaceId;
+  if (source?.fileIds && source.fileIds.length > 0) data.sourceFileIds = source.fileIds;
+
+  const docRef = await addDoc(quizzesCollection, data);
 
   return {
     id: docRef.id,
@@ -100,6 +108,8 @@ export async function createQuiz(
     questions: [],
     createdAt: now.toDate(),
     updatedAt: now.toDate(),
+    sourceWorkspaceId: source?.workspaceId ?? null,
+    sourceFileIds: source?.fileIds ?? [],
   };
 }
 
@@ -121,6 +131,8 @@ export async function getQuiz(quizId: string): Promise<Quiz | null> {
     questions: data.questions || [],
     createdAt: data.createdAt?.toDate() ?? new Date(),
     updatedAt: data.updatedAt?.toDate() ?? new Date(),
+    sourceWorkspaceId: data.sourceWorkspaceId ?? null,
+    sourceFileIds: data.sourceFileIds ?? [],
   };
 }
 
@@ -145,6 +157,8 @@ export async function getUserQuizzes(userId: string): Promise<Quiz[]> {
       questions: data.questions || [],
       createdAt: data.createdAt?.toDate() ?? new Date(),
       updatedAt: data.updatedAt?.toDate() ?? new Date(),
+      sourceWorkspaceId: data.sourceWorkspaceId ?? null,
+      sourceFileIds: data.sourceFileIds ?? [],
     });
   });
 
