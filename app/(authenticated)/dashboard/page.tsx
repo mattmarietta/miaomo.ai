@@ -65,9 +65,12 @@ function WorkspaceCard({
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
-  const formatDate = (timestamp: any) => {
+  const formatDate = (timestamp: { toDate: () => Date } | Date | string | number | null | undefined) => {
     if (!timestamp) return "";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date =
+      typeof timestamp === "object" && "toDate" in timestamp
+        ? timestamp.toDate()
+        : new Date(timestamp as string | number | Date);
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
@@ -393,6 +396,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium text-foreground">Study Tools</h2>
               <button
+                onMouseEnter={() => router.prefetch("/workspace-public/quiz-builder")}
                 onClick={() => router.push("/workspace-public/quiz-builder")}
                 className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >

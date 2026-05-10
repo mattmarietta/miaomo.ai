@@ -593,13 +593,14 @@ export function Chat({
                 </PopoverContent>
               </Popover>
 
-              <Popover>
+              <Popover open={studyToolsOpen} onOpenChange={setStudyToolsOpen}>
                 <PopoverTrigger asChild>
                   <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-7 rounded-full text-xs gap-1"
+                  onMouseEnter={() => router.prefetch("/workspace-public/quiz-builder")}
                   >
                     Study Tools
                     <GraduationCap size={12} className="text-muted-foreground" />
@@ -609,11 +610,24 @@ export function Chat({
                   <Command>
                     <CommandList>
                       <CommandGroup>
-                        <CommandItem onSelect ={() => router.push("/workspace-public/quiz-builder")}>
+                        <CommandItem
+                          onSelect={() => {
+                            // Close the popover first so Radix's focus-restore work doesn't
+                            // race with the router transition (this race made the new page
+                            // hang until the user clicked again).
+                            setStudyToolsOpen(false);
+                            router.push("/workspace-public/quiz-builder");
+                          }}
+                        >
                           Quiz/Flashcards
                           <BookOpen size={14} className="ml-auto" />
                         </CommandItem>
-                        <CommandItem onSelect={onToggleMindMap}>
+                        <CommandItem
+                          onSelect={() => {
+                            setStudyToolsOpen(false);
+                            onToggleMindMap();
+                          }}
+                        >
                           Mind Map
                           <Network size={14} className="ml-auto" />
                         </CommandItem>
