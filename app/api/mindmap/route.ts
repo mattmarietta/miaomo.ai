@@ -25,9 +25,9 @@ const mindmapSchema = z.object({
 });
 
 const BROAD_QUERY = "main topics, key concepts, and important ideas";
-const CHARS_PER_FILE = 6000;
-const PER_FILE_TOPK = 5;
-const MAX_CHUNKS = 30;
+const CHARS_PER_FILE = 15000;
+const PER_FILE_TOPK = 10;
+const MAX_CHUNKS = 60;
 
 export async function POST(req: NextRequest) {
   try {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { output } = await generateText({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-3-flash-preview"),
       output: Output.object({ schema: mindmapSchema }),
       prompt: `Analyze the following document excerpts from a study workspace and build a hierarchical mind map.
     Also generate a concise title (3-6 words) that captures the overall subject of the documents.

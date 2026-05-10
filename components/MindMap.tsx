@@ -3,13 +3,15 @@
 import {
   Background,
   Controls,
+  Handle,
   Position,
   ReactFlow,
   type Edge,
   type Node,
+  type NodeProps,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import type { User } from "firebase/auth";
+import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface MindMapProps {
@@ -49,17 +51,6 @@ const ROOT_STYLE: React.CSSProperties = {
   textAlign: "center" as const,
 };
 
-const TOPIC_STYLE: React.CSSProperties = {
-  width: NODE_W,
-  padding: "8px 12px",
-  borderRadius: 10,
-  background: "var(--card, #ffffff)",
-  color: "var(--card-foreground, #0f172a)",
-  border: "1px solid var(--border, #cbd5e1)",
-  fontWeight: 500,
-  fontSize: 12,
-};
-
 const CHILD_STYLE: React.CSSProperties = {
   width: NODE_W,
   padding: "6px 10px",
@@ -73,15 +64,69 @@ const CHILD_STYLE: React.CSSProperties = {
 };
 
 const EDGE_STYLE = { stroke: "#94a3b8", strokeWidth: 1.5 };
+const TOPIC_NODE_H = 32;
 
-function buildGraph(data: MindMapResponse): { nodes: Node[]; edges: Edge[] } {
+function TopicNode({ data }: NodeProps) {
+  const label = data.label as string;
+  const isExpanded = data.isExpanded as boolean;
+
+  return (
+    <div
+      style={{
+        width: NODE_W,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "var(--card, #ffffff)",
+        color: "var(--card-foreground, #0f172a)",
+        border: "1px solid var(--border, #cbd5e1)",
+        fontWeight: 500,
+        fontSize: 12,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <span 
+        style={{ 
+          flex: 1, 
+          minWidth: 0, 
+          overflow: "hidden", 
+          textOverflow: "ellipsis", 
+          whiteSpace: "nowrap", 
+        }}
+      >
+        {label}
+      </span>
+      <ChevronRight
+        size={13}
+        style={{
+          flexShrink: 0,
+          transition: "transform 0.2s ease",
+          transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+          opacity: 0.45,
+        }}
+      />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  );
+}
+const NODE_TYPES = { topic: TopicNode };
+function buildGraph(
+  data: MindMapResponse,
+  expandedTopics: Set<string>,
+): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
   const rootId = "root";
-  // Topic + child column heights — laid out top-down per topic.
-  const topicHeights = data.nodes.map(
-    (t) => Math.max(1, t.children.length) * (32 + V_GAP) - V_GAP
+  const topicIds = data.nodes.map((t, i) => t.id || `topic-${i}`);
+  // collapsed topic occupy only one row; expanded topics span their children
+  const topicHeights = data.nodes.map((t, i) =>
+    expandedTopics.has(topicIds[i])
+      ? Math.max(1, t.children.length) * (TOPIC_NODE_H + V_GAP) - V_GAP
+      : TOPIC_NODE_H,
   );
   const totalHeight =
     topicHeights.reduce((sum, h) => sum + h + V_GAP, 0) - V_GAP;
@@ -104,15 +149,17 @@ function buildGraph(data: MindMapResponse): { nodes: Node[]; edges: Edge[] } {
     const topicHeight = topicHeights[i];
     const topicCenterY = cursorY + topicHeight / 2;
 
-    const topicId = topic.id || `topic-${i}`;
+    const topicId = topicIds[i];
+    const isExpanded = expandedTopics.has(topicId);
     nodes.push({
       id: topicId,
-      type: "default",
-      data: { label: topic.label },
+      type: "topic",
+      data: { 
+        label: topic.label,
+        isExpanded,
+        isTopic: true, 
+      },
       position: { x: NODE_W + H_GAP, y: topicCenterY },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-      style: TOPIC_STYLE,
       draggable: false,
     });
 
@@ -124,31 +171,33 @@ function buildGraph(data: MindMapResponse): { nodes: Node[]; edges: Edge[] } {
       style: EDGE_STYLE,
     });
 
-    const childRowH = 32 + V_GAP;
-    let childY = cursorY;
-    topic.children.forEach((child, j) => {
-      const childId = child.id || `${topicId}-${j}`;
-      nodes.push({
-        id: childId,
-        type: "default",
-        data: { label: child.label, summary: child.summary, isLeaf: true },
-        position: { x: 2 * (NODE_W + H_GAP), y: childY },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        style: CHILD_STYLE,
-        draggable: false,
-      });
+    if (isExpanded) {
+      const childRowH = TOPIC_NODE_H + V_GAP;
+      let childY = cursorY;
+      topic.children.forEach((child, j) => {
+        const childId = child.id || `${topicId}-${j}`;
+        nodes.push({
+          id: childId,
+          type: "default",
+          data: { label: child.label, summary: child.summary, isLeaf: true },
+          position: { x: 2 * (NODE_W + H_GAP), y: childY },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+          style: CHILD_STYLE,
+          draggable: false,
+        });
 
-      edges.push({
-        id: `e-${topicId}-${childId}`,
-        source: topicId,
-        target: childId,
-        type: "smoothstep",
-        style: EDGE_STYLE,
-      });
+        edges.push({
+          id: `e-${topicId}-${childId}`,
+          source: topicId,
+          target: childId,
+          type: "smoothstep",
+          style: EDGE_STYLE,
+        });
 
-      childY += childRowH;
-    });
+        childY += childRowH;
+      });
+    }
 
     cursorY += topicHeight + V_GAP;
   });
@@ -160,6 +209,7 @@ export function MindMap({ workspaceId, user, onLeafClick }: MindMapProps) {
   const [data, setData] = useState<MindMapResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -201,16 +251,28 @@ export function MindMap({ workspaceId, user, onLeafClick }: MindMapProps) {
 
   const { nodes, edges } = useMemo(() => {
     if (!data) return { nodes: [] as Node[], edges: [] as Edge[] };
-    return buildGraph(data);
-  }, [data]);
+    return buildGraph(data, expandedTopics);
+  }, [data, expandedTopics]);
 
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.data?.isLeaf && onLeafClick) {
-        onLeafClick(
-          node.data.label as string,
-          (node.data.summary as string) || "",
-        );
+      if (node.data?.isLeaf) {
+        if (onLeafClick) {
+          onLeafClick(
+            node.data.label as string,
+            (node.data.summary as string) || "",
+          );
+        }
+      } else if (node.data?.isTopic) {
+        setExpandedTopics((prev) => {
+          const next = new Set(prev);
+          if (next.has(node.id)) {
+            next.delete(node.id);
+          } else {
+            next.add(node.id);
+          }
+          return next;
+        });
       }
     },
     [onLeafClick],
@@ -247,6 +309,7 @@ export function MindMap({ workspaceId, user, onLeafClick }: MindMapProps) {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={NODE_TYPES}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}

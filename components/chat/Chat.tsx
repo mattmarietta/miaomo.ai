@@ -114,6 +114,7 @@ export function Chat({
   const [webSearchMode, setWebSearchMode] = useState(false);
   const [selectedModel, setSelectedModel] = useState(models[0]);
   const [modelOpen, setModelOpen] = useState(false);
+  const [studyToolsOpen, setStudyToolsOpen] = useState(false);
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -592,16 +593,36 @@ export function Chat({
                 </PopoverContent>
               </Popover>
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
-                onClick={() => router.push("/workspace-public/quiz-builder")}
-                title="Study Tools"
-              >
-                <GraduationCap size={14} />
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 rounded-full text-xs gap-1"
+                  >
+                    Study Tools
+                    <GraduationCap size={12} className="text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-44 p-1" align="start">
+                  <Command>
+                    <CommandList>
+                      <CommandGroup>
+                        <CommandItem onSelect ={() => router.push("/workspace-public/quiz-builder")}>
+                          Quiz/Flashcards
+                          <BookOpen size={14} className="ml-auto" />
+                        </CommandItem>
+                        <CommandItem onSelect={onToggleMindMap}>
+                          Mind Map
+                          <Network size={14} className="ml-auto" />
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+          
             </div>
 
             <Button
@@ -658,25 +679,6 @@ export function Chat({
         </div>
 
         {renderInputBar()}
-
-        <div className="absolute bottom-6 left-6 flex flex-col gap-2">
-          <button
-            onClick={() => router.push("/workspace-public/quiz-builder")}
-            className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-muted"
-          >
-            <BookOpen size={16} />
-            Study Tools
-          </button>
-          {onToggleMindMap && (
-            <button
-              onClick={onToggleMindMap}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-muted ${showMindMap ? "bg-muted" : ""}`}
-            >
-              <Network size={16} />
-              Mind Map
-            </button>
-          )}
-        </div>
       </div>
     );
   }
@@ -1155,24 +1157,6 @@ export function Chat({
       </div>
 
       {renderInputBar()}
-
-      <div className="absolute bottom-6 left-6 flex flex-col gap-2">
-        <button
-          onClick={() => router.push("/workspace-public/quiz-builder")}
-          className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-muted">
-            <BookOpen size={16} />
-          Study Tools
-        </button>
-        {onToggleMindMap && (
-          <button
-            onClick={onToggleMindMap}
-            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-muted ${showMindMap ? "bg-muted" : ""}`}
-          >
-            <Network size={16} />
-            Mind Map
-          </button>
-        )}
-      </div>
     </div>
   );
 }
