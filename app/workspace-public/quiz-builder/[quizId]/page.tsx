@@ -264,7 +264,7 @@ export default function QuizEditorPage({ params }: PageProps) {
         <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => setShowAI(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-90 transition-colors"
           >
             <Sparkles size={16} />
             AI Generate
@@ -415,6 +415,7 @@ export default function QuizEditorPage({ params }: PageProps) {
                 {/* Explanation */}
                 {q.explanation && (
                   <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm">
+                    <span className="text-muted-foreground font-medium">Explanation: </span>
                     {q.explanation}
                   </div>
                 )}
@@ -455,7 +456,7 @@ export default function QuizEditorPage({ params }: PageProps) {
                   onClick={() => setAiMultipleChoice(!aiMultipleChoice)}
                   className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                     aiMultipleChoice
-                      ? "bg-violet-600 border-violet-600 text-white"
+                      ? "bg-foreground border-foreground text-background"
                       : "border-border hover:bg-muted"
                   }`}
                 >
@@ -465,7 +466,7 @@ export default function QuizEditorPage({ params }: PageProps) {
                   onClick={() => setAiTrueFalse(!aiTrueFalse)}
                   className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                     aiTrueFalse
-                      ? "bg-violet-600 border-violet-600 text-white"
+                      ? "bg-foreground border-foreground text-background"
                       : "border-border hover:bg-muted"
                   }`}
                 >
@@ -475,7 +476,7 @@ export default function QuizEditorPage({ params }: PageProps) {
                   onClick={() => setAiWritten(!aiWritten)}
                   className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                     aiWritten
-                      ? "bg-violet-600 border-violet-600 text-white"
+                      ? "bg-foreground border-foreground text-background"
                       : "border-border hover:bg-muted"
                   }`}
                 >
@@ -485,7 +486,7 @@ export default function QuizEditorPage({ params }: PageProps) {
                   onClick={() => setAiMatching(!aiMatching)}
                   className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                     aiMatching
-                      ? "bg-violet-600 border-violet-600 text-white"
+                      ? "bg-foreground border-foreground text-background"
                       : "border-border hover:bg-muted"
                   }`}
                 >
@@ -525,7 +526,7 @@ export default function QuizEditorPage({ params }: PageProps) {
               <button
                 onClick={handleGenerate}
                 disabled={!aiText.trim() || generating}
-                className="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg font-medium text-sm disabled:opacity-50 hover:bg-violet-700 transition-colors"
+                className="flex-1 px-4 py-2.5 bg-foreground text-background rounded-lg font-medium text-sm disabled:opacity-50 hover:opacity-90 transition-colors"
               >
                 {generating ? "Generating..." : "Generate"}
               </button>
@@ -699,7 +700,7 @@ function QuestionModal({
             <button
               type="button"
               onClick={addPair}
-              className="text-sm text-violet-400 hover:text-violet-300 mt-1"
+              className="text-sm text-muted-foreground hover:text-foreground mt-1"
             >
               + Add pair
             </button>

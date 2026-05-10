@@ -7,6 +7,15 @@ import { Flashcard, Card, getDeck, updateDeck, practiceCard } from "@/lib/fireba
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { SuperMemoGrade } from "supermemo";
 
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export default function StudyPage() {
   const router = useRouter();
   const params = useParams();
@@ -41,7 +50,7 @@ export default function StudyPage() {
           return;
         }
         setDeck(data);
-        setStudyCards([...data.cards].sort(() => Math.random() - 0.5));
+        setStudyCards(fisherYatesShuffle(data.cards));
       } catch (err) {
         console.error(err);
       } finally {
@@ -56,7 +65,7 @@ export default function StudyPage() {
 
     const card = studyCards[currentIndex];
     
-    // Map to SM-2 grades for algorithm
+    // Map to SM 2 grades for algorithm
     const gradeMap: Record<string, SuperMemoGrade> = {
       still: 1,
       almost: 3,
@@ -82,21 +91,18 @@ export default function StudyPage() {
       setCurrentIndex(currentIndex + 1);
       setIsFlipped(false);
     } else {
-      // End of current pile - check what to do next
       const newStillLearning = rating === "still" ? [...stillLearning, updatedCard] : stillLearning;
       const newAlmost = rating === "almost" ? [...almostCards, updatedCard] : almostCards;
 
       if (newStillLearning.length > 0) {
-        // Priority: review "still learning" cards first
-        setStudyCards([...newStillLearning].sort(() => Math.random() - 0.5));
+        setStudyCards(fisherYatesShuffle(newStillLearning));
         setStillLearning([]);
         // Keep almost cards for later
       } else if (newAlmost.length > 0) {
         // Then review "almost" cards once
-        setStudyCards([...newAlmost].sort(() => Math.random() - 0.5));
+        setStudyCards(fisherYatesShuffle(newAlmost));
         setAlmostCards([]);
       } else {
-        // All done!
         setCompleted(true);
         return;
       }
@@ -109,7 +115,7 @@ export default function StudyPage() {
 
   function handleRestart() {
     if (!deck) return;
-    setStudyCards([...deck.cards].sort(() => Math.random() - 0.5));
+    setStudyCards(fisherYatesShuffle(deck.cards));
     setStillLearning([]);
     setAlmostCards([]);
     setCurrentIndex(0);
@@ -189,25 +195,42 @@ export default function StudyPage() {
         </div>
       </div>
 
-      {/* Flashcard */}
+      {/* Flashcard with 3D flip animation */}
       <main className="max-w-2xl mx-auto p-6 flex flex-col items-center">
+
+        {/* Outer wrapper — sets up the 3D space with perspective */}
         <div
           onClick={() => setIsFlipped(!isFlipped)}
-          className="w-full aspect-[3/2] bg-card border border-border rounded-2xl p-8 flex items-center justify-center cursor-pointer hover:shadow-lg transition-shadow mb-8"
+          className="w-full aspect-[3/2] cursor-pointer mb-8"
+          style={{ perspective: "1000px" }}
         >
-          <div className="text-center">
-            {!isFlipped ? (
-              <>
-                <p className="text-xs text-muted-foreground mb-4">FRONT</p>
-                <p className="text-xl font-medium">{currentCard.front}</p>
-                <p className="text-xs text-muted-foreground mt-6">Click to flip</p>
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground mb-4">BACK</p>
-                <p className="text-lg">{currentCard.back}</p>
-              </>
-            )}
+          {/* Inner card — this is what actually rotates */}
+          <div
+            className="relative w-full h-full"
+            style={{
+              transformStyle: "preserve-3d",
+              transition: "transform 0.3s",
+              transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            }}
+          >
+            {/* Front face */}
+            <div
+              className="absolute inset-0 bg-card border border-border rounded-2xl p-8 flex items-center justify-center"
+              style={{ backfaceVisibility: "hidden" }}
+            >
+              <p className="text-2xl font-medium text-center">{currentCard.front}</p>
+            </div>
+
+            {/* Back face — rotated 180deg so it shows when the card flips */}
+            <div
+              className="absolute inset-0 bg-card border border-border rounded-2xl p-8 flex items-center justify-center"
+              style={{
+                backfaceVisibility: "hidden",
+                transform: "rotateY(180deg)",
+              }}
+            >
+              <p className="text-2xl text-center">{currentCard.back}</p>
+            </div>
           </div>
         </div>
 

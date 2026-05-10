@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/Auth";
 import {
@@ -11,6 +11,15 @@ import {
   saveQuizAttempt,
 } from "@/lib/firebase/quizStore";
 import { ArrowLeft, Check, X, RotateCcw, Trophy, Target } from "lucide-react";
+
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 type PageProps = {
   params: Promise<{ quizId: string }>;
@@ -136,6 +145,21 @@ export default function TakeQuizPage({ params }: PageProps) {
     setMatchingAnswers(ma);
   }
 
+  // Shuffle definitions once per quiz load
+  const shuffledMatchingDefs = useMemo(() => {
+    if (!quiz) return {};
+    const map: Record<string, string[]> = {};
+    quiz.questions
+      .filter(q => q.type === "matching")
+      .forEach(q => {
+        if (q.matchingPairs) {
+          map[q.id] = fisherYatesShuffle(q.matchingPairs.map(p => p.definition));
+        }
+      });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quiz?.id]);
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -164,9 +188,9 @@ export default function TakeQuizPage({ params }: PageProps) {
   if (submitted) {
     const pct = Math.round((score / total) * 100);
     let grade = "F";
-    let gradeColor = "text-red-400";
-    if (pct >= 90) { grade = "A"; gradeColor = "text-green-400"; }
-    else if (pct >= 80) { grade = "B"; gradeColor = "text-green-400"; }
+    let gradeColor = "text-rose-400";
+    if (pct >= 90) { grade = "A"; gradeColor = "text-emerald-400"; }
+    else if (pct >= 80) { grade = "B"; gradeColor = "text-emerald-400"; }
     else if (pct >= 70) { grade = "C"; gradeColor = "text-yellow-400"; }
     else if (pct >= 60) { grade = "D"; gradeColor = "text-orange-400"; }
 
@@ -229,17 +253,17 @@ export default function TakeQuizPage({ params }: PageProps) {
                 <div
                   key={q.id}
                   className={`bg-card border rounded-xl p-5 ${
-                    correct ? "border-green-500/30" : "border-red-500/30"
+                    correct ? "border-emerald-400/40" : "border-rose-400/40"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      correct ? "bg-green-500/20" : "bg-red-500/20"
+                      correct ? "bg-emerald-500/15" : "bg-rose-500/15"
                     }`}>
                       {correct ? (
-                        <Check size={18} className="text-green-400" />
+                        <Check size={18} className="text-emerald-400" />
                       ) : (
-                        <X size={18} className="text-red-400" />
+                        <X size={18} className="text-rose-400" />
                       )}
                     </div>
                     <div className="flex-1">
@@ -249,19 +273,19 @@ export default function TakeQuizPage({ params }: PageProps) {
                       {q.type !== "matching" && (
                         <div className="space-y-2">
                           <div className={`p-3 rounded-lg border ${
-                            correct ? "border-green-500/30 bg-green-500/10" : "border-red-500/30 bg-red-500/10"
+                            correct ? "border-emerald-400/40 bg-emerald-500/10" : "border-rose-400/40 bg-rose-500/10"
                           }`}>
                             <span className="text-sm text-muted-foreground">Your answer: </span>
-                            <span className={correct ? "text-green-400" : "text-red-400"}>
+                            <span className={correct ? "text-emerald-400" : "text-rose-400"}>
                               {q.type === "multiple-choice" && q.options
                                 ? q.options.find(o => o.id === userAns)?.text || "(none)"
                                 : userAns || "(none)"}
                             </span>
                           </div>
                           {!correct && (
-                            <div className="p-3 rounded-lg border border-green-500/30 bg-green-500/10">
+                            <div className="p-3 rounded-lg border border-emerald-400/40 bg-emerald-500/10">
                               <span className="text-sm text-muted-foreground">Correct answer: </span>
-                              <span className="text-green-400">
+                              <span className="text-emerald-400">
                                 {q.type === "multiple-choice" && q.options
                                   ? q.options.find(o => o.id === q.correctAnswer)?.text
                                   : q.correctAnswer}
@@ -278,17 +302,17 @@ export default function TakeQuizPage({ params }: PageProps) {
                             const isRight = userMatch === p.definition;
                             return (
                               <div key={p.id} className={`p-3 rounded-lg border ${
-                                isRight ? "border-green-500/30 bg-green-500/10" : "border-red-500/30 bg-red-500/10"
+                                isRight ? "border-emerald-400/40 bg-emerald-500/10" : "border-rose-400/40 bg-rose-500/10"
                               }`}>
                                 <div className="flex items-center gap-2">
                                   {isRight ? (
-                                    <Check size={14} className="text-green-400" />
+                                    <Check size={14} className="text-emerald-400" />
                                   ) : (
-                                    <X size={14} className="text-red-400" />
+                                    <X size={14} className="text-rose-400" />
                                   )}
                                   <span>{p.term}</span>
                                   <span className="text-muted-foreground">→</span>
-                                  <span className={isRight ? "text-green-400" : "text-red-400"}>
+                                  <span className={isRight ? "text-emerald-400" : "text-rose-400"}>
                                     {userMatch || "(none)"}
                                   </span>
                                   {!isRight && (
@@ -429,7 +453,7 @@ export default function TakeQuizPage({ params }: PageProps) {
                       onClick={() => setAnswers({ ...answers, [q.id]: "true" })}
                       className={`flex-1 py-3 rounded-lg border font-medium transition-all ${
                         answers[q.id] === "true"
-                          ? "border-green-500 bg-green-500/10 text-green-400"
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                           : "border-border hover:border-muted-foreground"
                       }`}
                     >
@@ -439,7 +463,7 @@ export default function TakeQuizPage({ params }: PageProps) {
                       onClick={() => setAnswers({ ...answers, [q.id]: "false" })}
                       className={`flex-1 py-3 rounded-lg border font-medium transition-all ${
                         answers[q.id] === "false"
-                          ? "border-red-500 bg-red-500/10 text-red-400"
+                          ? "border-rose-500 bg-rose-500/10 text-rose-400"
                           : "border-border hover:border-muted-foreground"
                       }`}
                     >
@@ -486,9 +510,7 @@ export default function TakeQuizPage({ params }: PageProps) {
               {matchingQuestions.map((q, idx) => {
                 if (!q.matchingPairs) return null;
                 
-                const shuffledDefs = [...q.matchingPairs]
-                  .map(p => p.definition)
-                  .sort(() => 0.5 - Math.random());
+                const shuffledDefs = shuffledMatchingDefs[q.id] || [];
 
                 return (
                   <div key={q.id} className="bg-card border border-border rounded-xl p-5">
