@@ -1,4 +1,5 @@
 "use client";
+import { useAuth } from "@/components/Auth";
 import { AppSidebarWorkspaceList } from "@/components/sidebar/AppSidebarWorkspaceList";
 import { AppSidebarWorkspaceView } from "@/components/sidebar/AppSidebarWorkspaceView";
 import { AppSidebarHeader } from "@/components/sidebar/AppSidebarHeader";
@@ -15,13 +16,17 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { ChevronRight } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { ChevronRight, Settings } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useAuth();
 
   // Extract workspace ID from path like /workspace/abc123 or /workspace/abc123/chat/xyz
   const workspaceMatch = pathname.match(/^\/workspace\/([^/]+)/);
@@ -60,7 +65,21 @@ export function AppSidebar() {
           </Collapsible>
         )}
       </SidebarContent>
-      <SidebarFooter></SidebarFooter>
+      <SidebarFooter className="bg-white">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="gap-2"
+              onClick={() => router.push("/account-settings")}
+            >
+              <Settings className="size-4" />
+              <span className="text-sm font-medium">
+                {user?.displayName || user?.email || "Settings"}
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
